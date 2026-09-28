@@ -43,6 +43,10 @@ static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 			u.sex[c] = u.sex[s]
 			u.look[c] = u.look[s]
 			u.flags[c] = u.flags[s]
+			u.traits[c] = u.traits[s]
+			u.max_health[c] = u.max_health[s]
+			u.health[c] = u.health[s]
+			u.death_age[c] = u.death_age[s]
 			if u.city[s] != SimConst.CITY_NONE and sim.cities.has(u.city[s]):
 				sim.civ.join_city(c, sim.cities[u.city[s]])
 			return _ok("Duplicated", {"id": u.id[c]})
@@ -154,7 +158,12 @@ static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 			var nk := sim.realm.rebel(rc, [["cause", "stirred up by the gods"]])
 			return _ok("%s rebelled" % rc.name, {"kingdom": nk.id}) if nk != null else _fail("This town cannot rebel")
 		"set_world_age":
-			var idx := AgeSystem.index_of(str(cmd.get("age", "")))
+			if not sim.laws.is_on("world_ages"):
+				return _fail("World ages are switched off (law)")
+			var want := str(cmd.get("age", ""))
+			var idx := AgeSystem.index_of(want)
+			if want != "" and idx < 0:
+				return _fail("Unknown age '%s'" % want)
 			if idx < 0:
 				idx = (sim.ages.current + 1) % AgeSystem.AGES.size()
 			sim.ages.begin(idx, "the gods turned the wheel")

@@ -59,6 +59,24 @@ static func validate(d: Dictionary) -> String:
 	err = _disasters(d["disasters"], size, int(wd["w"]), int(wd["h"]))
 	if err != "":
 		return err
+	# Id counters must exceed every id in use, or new objects would overwrite old ones.
+	for pair: Array in [["next_city_id", d["cities"]], ["next_building_id", d["buildings"]], ["next_kingdom_id", d["kingdoms"]]]:
+		for e: Dictionary in pair[1]:
+			if int(e["id"]) >= int(d[pair[0]]):
+				return "%s does not exceed id %d" % [pair[0], int(e["id"])]
+	var ud2: Dictionary = d["units"]
+	if typeof(ud2.get("next_id")) != TYPE_INT:
+		return "units.next_id missing"
+	var alive2: PackedByteArray = ud2["alive"]
+	var ids2: PackedInt64Array = ud2["id"]
+	for s in alive2.size():
+		if alive2[s] == 1 and ids2[s] >= int(ud2["next_id"]):
+			return "units.next_id does not exceed id %d" % ids2[s]
+	var free_seen := {}
+	for s in ud2["free"]:
+		if free_seen.has(s) or alive2[s] == 1:
+			return "free list holds a living or repeated slot"
+		free_seen[s] = true
 	var voy: Variant = (d["civ_state"] as Dictionary).get("voyages")
 	if typeof(voy) != TYPE_DICTIONARY:
 		return "voyages missing"

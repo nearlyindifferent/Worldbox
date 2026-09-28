@@ -134,9 +134,16 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 				errs.append("tile %d owned by missing city %d" % [i, o])
 				break
 		var bid := w.building[i]
-		if bid != SimConst.BUILDING_ID_NONE and not sim.buildings.has(bid):
-			errs.append("tile %d references missing building %d" % [i, bid])
-			break
+		if bid != SimConst.BUILDING_ID_NONE:
+			if not sim.buildings.has(bid):
+				errs.append("tile %d references missing building %d" % [i, bid])
+				break
+			var bb: Building = sim.buildings[bid]
+			var bx := i % w.width - bb.x
+			var by := i / w.width - bb.y
+			if bx < 0 or by < 0 or bx >= bb.def().size or by >= bb.def().size:
+				errs.append("tile %d marked for building %d outside its footprint" % [i, bid])
+				break
 		if not is_finite(w.elevation[i]) or not is_finite(w.temperature[i]):
 			errs.append("tile %d non-finite climate" % i)
 			break

@@ -765,9 +765,20 @@ func destroy_building(bid: int, reason: String) -> void:
 		c.buildings.remove_at(k)
 	_recompute_capacity(c)
 	sim.history.record(sim.tick, HistoryLog.Kind.BUILDING, "A %s of %s was destroyed (%s)." % [b.def().name.to_lower(), c.name, reason], {"city": c.id}, b.center_tile(w.width))
-	if b.def().storage and not _has_storage(c):
+	if b.def().id == "town_hall" and count_complete(c, "town_hall") == 0:
+		# Survivors raise a new hall; with no people or no room the town is lost
+		# unless another storehouse (a granary) keeps it going around a new centre.
 		if not (c.population() > 0 and _rebuild_hall(c)):
-			abandon_city(c, "its town hall was destroyed")
+			if _has_storage(c):
+				for gid in c.buildings:
+					var g: Building = sim.buildings[gid]
+					if g.complete and g.def().storage:
+						c.center = g.center_tile(w.width)
+						break
+			else:
+				abandon_city(c, "its town hall was destroyed")
+	elif b.def().storage and not _has_storage(c):
+		abandon_city(c, "its last storehouse was destroyed")
 
 
 ## Survivors raise a new hall (half the stored goods are lost) instead of abandoning

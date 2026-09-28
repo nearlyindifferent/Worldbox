@@ -29,7 +29,7 @@ const DESCRIPTIONS := {
 	"diplomacy": "Kingdoms form opinions of each other.",
 	"wars": "Kingdoms may declare war.",
 	"rebellions": "Disloyal cities may rise up and break away.",
-	"natural_disasters": "Lightning wildfires and plague outbreaks happen on their own.",
+	"natural_disasters": "Lightning wildfires, plague outbreaks and age-driven earthquakes happen on their own.",
 	"world_ages": "Long eras shift harvests, fires, plague and strife.",
 }
 

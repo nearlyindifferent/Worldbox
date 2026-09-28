@@ -250,6 +250,8 @@ func _hunt(s: int) -> bool:
 	var best := -1
 	var best_d := INF
 	for p in prey:
+		if u.has_flag(p, UnitStore.Flag.INVULNERABLE):
+			continue
 		var d := Vector2(u.x[p] - u.x[s], u.y[p] - u.y[s]).length_squared()
 		if d < best_d:
 			best_d = d
@@ -596,7 +598,7 @@ func _resolve_hunt(s: int) -> void:
 	var p := u.task_target[s]
 	u.task[s] = UnitStore.Task.NONE
 	u.next_think[s] = sim.tick + 1
-	if p < 0 or p >= u.capacity or u.alive[p] == 0 or u.species[p] != sim.sheep_species:
+	if p < 0 or p >= u.capacity or u.alive[p] == 0 or u.species[p] != sim.sheep_species or u.has_flag(p, UnitStore.Flag.INVULNERABLE):
 		return
 	var d := Vector2(u.x[p] - u.x[s], u.y[p] - u.y[s]).length()
 	if d <= HUNT_KILL_RANGE:

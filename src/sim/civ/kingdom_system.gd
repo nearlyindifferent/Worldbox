@@ -530,20 +530,20 @@ func _sieges() -> void:
 				defenders += 1
 			elif foes.has(ok):
 				attackers[ok] = int(attackers.get(ok, 0)) + 1
-		# Watchtowers hold the walls like extra defenders.
-		defenders += sim.civ.count_complete(c, "watchtower") * int(Defs.building_by_id("watchtower").raw.get("defenders", 3))
 		if defenders > 0 or attackers.is_empty():
 			continue
+		# Watchtowers make the besiegers bring more soldiers (they never hold alone).
+		var towers := sim.civ.count_complete(c, "watchtower") * int(Defs.building_by_id("watchtower").raw.get("defenders", 3))
 		var best := -1
 		var best_n := 0
 		for kid: int in attackers:
 			if int(attackers[kid]) > best_n:
 				best_n = attackers[kid]
 				best = kid
-		if best_n >= SIEGE_MIN_ATTACKERS and sim.kingdoms.has(best):
+		if best_n >= SIEGE_MIN_ATTACKERS + towers and sim.kingdoms.has(best):
 			var winner: Kingdom = sim.kingdoms[best]
 			sim.decisions.record(sim.tick, "war", winner.name, "captured %s" % c.name,
-				[["attacking soldiers at the hall", best_n], ["defending soldiers", defenders]], {"kingdom": winner.id, "city": c.id})
+				[["attacking soldiers at the hall", best_n], ["defending soldiers", defenders], ["attackers needed (towers)", SIEGE_MIN_ATTACKERS + towers]], {"kingdom": winner.id, "city": c.id})
 			transfer_city(c, winner, "conquered")
 
 

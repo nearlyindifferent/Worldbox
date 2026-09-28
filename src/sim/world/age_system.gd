@@ -49,6 +49,8 @@ static func index_of(id: String) -> int:
 
 func monthly() -> void:
 	if not sim.laws.is_on("world_ages"):
+		# Time stands still for the age while ages are switched off.
+		until += SimConst.TICKS_PER_MONTH
 		return
 	if sim.tick >= until:
 		var next := sim.rng.randi_range(0, AGES.size() - 2)
@@ -56,7 +58,7 @@ func monthly() -> void:
 			next += 1
 		begin(next, "the wheel of ages turned")
 	var q := factor("quake")
-	if q > 0.0 and sim.rng.chance(q):
+	if q > 0.0 and sim.laws.is_on("natural_disasters") and sim.rng.chance(q):
 		for attempt in 30:
 			var i := sim.rng.randi_range(0, sim.world.size - 1)
 			if sim.world.is_walkable(i):

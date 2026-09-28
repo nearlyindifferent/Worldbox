@@ -209,6 +209,10 @@ func step() -> void:
 	civ.update()
 	_time("civ", t)
 
+	t = Time.get_ticks_usec()
+	animal_ai.reproduction_slice()
+	_time("breeding", t)
+
 	if tick % SimConst.TICKS_PER_YEAR == 0 and units.should_compact():
 		units.compact()
 		movement.reset_waypoints()
@@ -218,7 +222,6 @@ func step() -> void:
 		realm.monthly()
 		_time("kingdoms", t)
 		t = Time.get_ticks_usec()
-		animal_ai.monthly_reproduction()
 		ages.monthly()
 		disasters.monthly()
 		_sample_stats()

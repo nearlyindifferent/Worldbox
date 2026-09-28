@@ -235,7 +235,7 @@ func compact() -> void:
 		set(f, arr)
 	# Slot-valued references: hunting targets (task_target holds a prey slot).
 	for t in n:
-		if task[t] == Task.HUNT:
+		if task[t] == Task.HUNT or task[t] == Task.FIGHT:
 			var tgt := task_target[t]
 			task_target[t] = remap[tgt] if tgt >= 0 and tgt < capacity else -1
 	var new_path := {}

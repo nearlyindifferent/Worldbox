@@ -167,12 +167,17 @@ func _finish_graze(s: int) -> void:
 
 
 ## Monthly breeding pass. Density caps stop exponential blow-up; food limits do the rest.
-func monthly_reproduction() -> void:
+## Breeding pass, run every tick over the 1/30 of animal slots whose turn it is,
+## so each female is considered once a month without a monthly frame spike.
+func reproduction_slice() -> void:
+	if sim.tick % SimConst.TICKS_PER_MONTH == 0:
+		_predator_migration()
 	if not sim.laws.is_on("animal_reproduction"):
 		return
 	var u := sim.units
 	var births: Array[Vector3i] = []  # (species, mother slot, count)
-	for s in u.capacity:
+	var phase := sim.tick % SimConst.TICKS_PER_MONTH
+	for s in range(phase, u.capacity, SimConst.TICKS_PER_MONTH):
 		if u.alive[s] == 0 or u.species[s] == sim.human_species or u.sex[s] != UnitStore.SEX_FEMALE:
 			continue
 		var def: Defs.SpeciesDef = Defs.species[u.species[s]]
@@ -185,8 +190,8 @@ func monthly_reproduction() -> void:
 			continue
 		# Density pressure: crowding within CROWD_RADIUS and local grass both scale fertility,
 		# so herds grow where forage is plentiful and level off where it is grazed down.
-		var near := sim.spatial.query_radius(u, u.x[s], u.y[s], maxf(CROWD_RADIUS, float(def.raw.get("mate_radius", 0))), u.species[s])
 		var cap := float(def.raw.get("local_density_cap", 12))
+		var near := sim.spatial.query_radius(u, u.x[s], u.y[s], maxf(CROWD_RADIUS, float(def.raw.get("mate_radius", 0))), u.species[s], int(cap) + 1)
 		if near.size() >= cap:
 			continue
 		var has_mate := false
@@ -197,7 +202,6 @@ func monthly_reproduction() -> void:
 		var food := maxf(0.3, _prey_factor(s)) if _carnivore[u.species[s]] == 1 else _forage_factor(u.x[s], u.y[s])
 		if has_mate and sim.rng.chance(food * (1.0 - near.size() / cap)):
 			births.append(Vector3i(u.species[s], s, sim.rng.randi_range(def.litter_min, def.litter_max)))
-	_predator_migration()
 	for b in births:
 		var m := b.y
 		if u.alive[m] == 0:
@@ -221,6 +225,8 @@ func _predator_think(s: int) -> void:
 			# Starving predators range twice as far for food.
 			var reach := float(raw.get("hunt_radius", 10)) * (2.0 if hunger >= 60.0 else 1.0)
 			for o in sim.spatial.query_radius(u, u.x[s], u.y[s], reach, sp, 12):
+				if u.has_flag(o, UnitStore.Flag.INVULNERABLE):
+					continue
 				var d := Vector2(u.x[o] - u.x[s], u.y[o] - u.y[s]).length_squared()
 				if d < best_d:
 					best_d = d
@@ -332,8 +338,10 @@ func _forage_factor(x: float, y: float) -> float:
 func _predator_migration() -> void:
 	if sim.tick % (SimConst.TICKS_PER_YEAR * MIGRATION_YEARS) != 0:
 		return
+	# Large worlds need more than one surviving pair to count as "still present".
+	var floor_count := maxi(2, sim.world.size / 20000 * 2)
 	for sp: Defs.SpeciesDef in Defs.species:
-		if _carnivore[sp.index] == 0 or sim.count_species(sp.index) >= 2:
+		if _carnivore[sp.index] == 0 or sim.count_species(sp.index) >= floor_count:
 			continue
 		var prey := 0
 		for p in _prey[sp.index]:
