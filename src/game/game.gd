@@ -106,6 +106,19 @@ func _install(new_sim: Simulation) -> void:
 	selection_changed.emit()
 
 
+var _autosave_task: int = -1
+
+
+## Autosave snapshots state on the main thread, then compresses, hashes and writes
+## on a worker so the frame does not hitch. One autosave at a time.
+func _start_autosave() -> void:
+	var prepared := saves.prepare(sim, saves.next_autosave_slot(), MapImage.render(sim, 128), {"autosave": true})
+	if not prepared["ok"]:
+		return
+	var mgr := saves
+	_autosave_task = WorkerThreadPool.add_task(func() -> void: mgr.write_prepared(prepared), false, "autosave")
+
+
 func save_world(slot: String) -> bool:
 	var meta := {"camera": [camera.position.x, camera.position.y, camera.zoom.x]}
 	var r := saves.save_slot(sim, slot, MapImage.render(sim, 192), meta)
@@ -172,9 +185,12 @@ func _process(delta: float) -> void:
 				_acc = minf(_acc, 1.0)
 				break
 	sim_ms_last_frame = (Time.get_ticks_usec() - t0) / 1000.0
-	if ticks_last_frame > 0 and sim.year() >= _last_autosave_year + AUTOSAVE_YEARS:
+	if ticks_last_frame > 0 and sim.year() >= _last_autosave_year + AUTOSAVE_YEARS and _autosave_task < 0:
 		_last_autosave_year = sim.year()
-		saves.save_slot(sim, saves.next_autosave_slot(), MapImage.render(sim, 192), {"autosave": true})
+		_start_autosave()
+	if _autosave_task >= 0 and WorkerThreadPool.is_task_completed(_autosave_task):
+		WorkerThreadPool.wait_for_task_completion(_autosave_task)
+		_autosave_task = -1
 	var alpha := clampf(_acc, 0.0, 1.0) if tps > 0.0 else 1.0
 	units_view.alpha = alpha
 	fx.unit_alpha = alpha

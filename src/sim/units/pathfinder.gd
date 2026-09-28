@@ -11,6 +11,9 @@ var budget_left: int = 0
 var requests_total: int = 0
 var refused_total: int = 0
 var unreachable_skipped: int = 0
+## Deterministic work budget: each request costs its octile distance, so a tick can
+## serve many short routes or a few long ones, never dozens of island-crossing searches.
+var work_left: int = 0
 
 ## Connected land components ("landmasses"). Queries between different components are
 ## answered instantly instead of exhausting A* over a whole island. Labels are rebuilt
@@ -103,6 +106,7 @@ func refresh_tile_cost(i: int) -> void:
 
 func begin_tick(tick: int = 0) -> void:
 	budget_left = SimConst.PATH_BUDGET_PER_TICK
+	work_left = SimConst.PATH_WORK_BUDGET_PER_TICK
 	_now_tick = tick
 
 
@@ -122,6 +126,11 @@ func find_path(from_i: int, to_i: int) -> Variant:
 	if ca >= 0 and cb >= 0 and ca != cb:
 		unreachable_skipped += 1
 		return PackedInt32Array()
+	var cost := maxi(absi(a.x - b.x), absi(a.y - b.y)) + mini(absi(a.x - b.x), absi(a.y - b.y)) / 2
+	if cost > work_left and work_left < SimConst.PATH_WORK_BUDGET_PER_TICK:
+		refused_total += 1
+		return null
+	work_left -= cost
 	budget_left -= 1
 	requests_total += 1
 	# Starting on a solid tile (e.g. just flooded) is allowed; A* treats start specially.

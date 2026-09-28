@@ -317,7 +317,8 @@ func compute_job_targets(c: City, adults: int) -> PackedInt32Array:
 	want["woodcutter"] = maxi(1, ceili(adults * 0.25)) if wood < wood_need + 12.0 else (1 if adults >= 4 else 0)
 	want["builder"] = mini(sites_ready * 2, maxi(1, ceili(adults * 0.25)))
 	want["miner"] = maxi(1, ceili(adults * 0.1)) if stone < stone_need else (1 if adults >= 8 and stone < 40.0 else 0)
-	want["hunter"] = 1 if adults >= 6 else 0
+	# Hunting is a hardship measure: only when stores cover < 3 months of need.
+	want["hunter"] = 1 if adults >= 6 and months_of_food < 3.0 else 0
 	var left := adults
 	for jid in ["farmer", "gatherer", "woodcutter", "builder", "miner", "hunter"]:
 		var n := mini(int(want[jid]), left)

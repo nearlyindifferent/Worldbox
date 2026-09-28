@@ -27,6 +27,9 @@ var deaths_by_cause: Dictionary = {}
 var total_births: int = 0
 var total_deaths: int = 0
 var deceased: Dictionary = {}   ## id -> summary, bounded (genealogy of the dead)
+## Insertion-ordered ids of `deceased` for O(1) eviction (derived: rebuilt on load).
+var _deceased_order := PackedInt64Array()
+var _deceased_head: int = 0
 const DECEASED_CAP := 20000
 var command_log: Array[Dictionary] = []
 const COMMAND_LOG_CAP := 2000
@@ -154,6 +157,9 @@ func step() -> void:
 	civ.update()
 	_time("civ", t)
 
+	if tick % SimConst.TICKS_PER_YEAR == 0 and units.should_compact():
+		units.compact()
+		spatial.rebuild(units)
 	if tick % SimConst.TICKS_PER_MONTH == 0:
 		t = Time.get_ticks_usec()
 		animal_ai.monthly_reproduction()
@@ -292,10 +298,15 @@ func kill_unit(s: int, cause: String) -> void:
 	if units.species[s] == human_species:
 		deceased[uid] = {"name": units.name[s], "species": units.species[s], "born": units.birth_tick[s], "died": tick,
 			"cause": cause, "mother": units.mother[s], "father": units.father[s], "city": c, "sex": units.sex[s]}
+		_deceased_order.append(uid)
 		if deceased.size() > DECEASED_CAP:
-			var evicted: int = deceased.keys()[0]
+			var evicted: int = _deceased_order[_deceased_head]
+			_deceased_head += 1
 			deceased.erase(evicted)
 			units.children.erase(evicted)
+			if _deceased_head > 4096:
+				_deceased_order = _deceased_order.slice(_deceased_head)
+				_deceased_head = 0
 	month_deaths += 1
 	total_deaths += 1
 	var key := "%s: %s" % [(Defs.species[units.species[s]] as Defs.SpeciesDef).id, cause]
@@ -415,6 +426,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim.total_births = int(d["total_births"])
 	sim.total_deaths = int(d["total_deaths"])
 	sim.deceased = d["deceased"]
+	sim._deceased_order = PackedInt64Array(sim.deceased.keys())
 	sim.pop_milestone = int(d["pop_milestone"])
 	sim._init_systems()
 	sim.civ.from_dict(d["civ_state"])

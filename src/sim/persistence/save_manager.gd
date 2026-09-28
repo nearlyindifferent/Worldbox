@@ -42,14 +42,37 @@ static func valid_slot_name(slot: String) -> bool:
 
 
 func save_slot(sim: Simulation, slot: String, thumbnail: Image = null, extra_meta: Dictionary = {}) -> Dictionary:
+	var prepared := prepare(sim, slot, thumbnail, extra_meta)
+	if not prepared["ok"]:
+		return prepared
+	return write_prepared(prepared)
+
+
+## Main-thread half of a save: snapshot the simulation into bytes + metadata.
+## Everything after this (compression, hashing, disk I/O) is thread-safe.
+func prepare(sim: Simulation, slot: String, thumbnail: Image = null, extra_meta: Dictionary = {}) -> Dictionary:
 	if not valid_slot_name(slot):
 		return {"ok": false, "msg": "Invalid slot name"}
-	var t0 := Time.get_ticks_msec()
-	var dir := slot_dir(slot)
-	DirAccess.make_dir_recursive_absolute(dir)
 	# A half-drawn brush stroke is closed so the saved undo history equals the live one.
 	sim.editor.end_stroke()
-	var raw := var_to_bytes(sim.to_dict())
+	var humans := sim.count_species(sim.human_species)
+	var meta := {
+		"slot": slot, "saved_unix": Time.get_unix_time_from_system(), "saved_at": Time.get_datetime_string_from_system(),
+		"container_version": CONTAINER_VERSION, "schema": Simulation.SAVE_SCHEMA, "seed": sim.seed_value,
+		"shape": sim.shape, "width": sim.world.width, "height": sim.world.height, "tick": sim.tick,
+		"date": sim.date_string(), "population": humans, "animals": sim.units.count - humans,
+		"cities": sim.cities.size(), "engine": Engine.get_version_info()["string"],
+	}
+	meta.merge(extra_meta, true)
+	return {"ok": true, "slot": slot, "raw": var_to_bytes(sim.to_dict()), "meta": meta, "thumb": thumbnail, "t0": Time.get_ticks_msec()}
+
+
+## Worker-safe half of a save: compress, checksum, write atomically, write meta/thumb.
+func write_prepared(p: Dictionary) -> Dictionary:
+	var slot: String = p["slot"]
+	var raw: PackedByteArray = p["raw"]
+	var dir := slot_dir(slot)
+	DirAccess.make_dir_recursive_absolute(dir)
 	var packed := raw.compress(FileAccess.COMPRESSION_ZSTD)
 	var digest := _sha256(packed)
 	var tmp := dir.path_join("world.sav.tmp")
@@ -80,15 +103,8 @@ func save_slot(sim: Simulation, slot: String, thumbnail: Image = null, extra_met
 		return {"ok": false, "msg": "Rename failed: %s" % error_string(err)}
 	if FileAccess.file_exists(bak):
 		DirAccess.remove_absolute(bak)
-	var humans := sim.count_species(sim.human_species)
-	var meta := {
-		"slot": slot, "saved_unix": Time.get_unix_time_from_system(), "saved_at": Time.get_datetime_string_from_system(),
-		"container_version": CONTAINER_VERSION, "schema": Simulation.SAVE_SCHEMA, "seed": sim.seed_value,
-		"shape": sim.shape, "width": sim.world.width, "height": sim.world.height, "tick": sim.tick,
-		"date": sim.date_string(), "population": humans, "animals": sim.units.count - humans,
-		"cities": sim.cities.size(), "bytes": packed.size() + HEADER_BYTES, "engine": Engine.get_version_info()["string"],
-	}
-	meta.merge(extra_meta, true)
+	var meta: Dictionary = p["meta"]
+	meta["bytes"] = packed.size() + HEADER_BYTES
 	var meta_tmp := dir.path_join("meta.json.tmp")
 	var mf := FileAccess.open(meta_tmp, FileAccess.WRITE)
 	if mf:
@@ -97,9 +113,10 @@ func save_slot(sim: Simulation, slot: String, thumbnail: Image = null, extra_met
 		if FileAccess.file_exists(dir.path_join("meta.json")):
 			DirAccess.remove_absolute(dir.path_join("meta.json"))
 		DirAccess.rename_absolute(meta_tmp, dir.path_join("meta.json"))
-	if thumbnail != null:
-		thumbnail.save_png(dir.path_join("thumb.png"))
-	return {"ok": true, "msg": "Saved to %s" % slot, "bytes": meta["bytes"], "ms": Time.get_ticks_msec() - t0}
+	var thumb: Image = p.get("thumb", null)
+	if thumb != null:
+		thumb.save_png(dir.path_join("thumb.png"))
+	return {"ok": true, "msg": "Saved to %s" % slot, "bytes": meta["bytes"], "ms": Time.get_ticks_msec() - int(p["t0"])}
 
 
 func load_slot(slot: String) -> Dictionary:

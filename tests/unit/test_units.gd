@@ -111,13 +111,25 @@ func test_pathfinding_avoids_water_and_follows_edits() -> void:
 
 
 func test_path_budget_is_enforced() -> void:
-	var sim := TestWorlds.flat(48)
+	var sim := TestWorlds.flat(64)
+	# Short routes are limited by request count.
 	sim.pathfinder.begin_tick()
 	var served := 0
 	for k in SimConst.PATH_BUDGET_PER_TICK + 10:
-		if sim.pathfinder.find_path(sim.world.idx(10, 10), sim.world.idx(30, 30)) != null:
+		if sim.pathfinder.find_path(sim.world.idx(10, 10), sim.world.idx(14, 12)) != null:
 			served += 1
-	assert_eq(served, SimConst.PATH_BUDGET_PER_TICK)
+	assert_eq(served, SimConst.PATH_BUDGET_PER_TICK, "count limit")
+	# Long routes are limited by distance work.
+	sim.pathfinder.begin_tick()
+	served = 0
+	for k in 100:
+		if sim.pathfinder.find_path(sim.world.idx(5, 5), sim.world.idx(55, 5)) != null:
+			served += 1
+	assert_eq(served, SimConst.PATH_WORK_BUDGET_PER_TICK / 50, "work limit")
+	# A single route longer than the whole budget is still served first.
+	sim.pathfinder.begin_tick()
+	sim.pathfinder.work_left = SimConst.PATH_WORK_BUDGET_PER_TICK
+	assert_true(sim.pathfinder.find_path(sim.world.idx(5, 5), sim.world.idx(58, 58)) != null, "first request always served")
 
 
 func test_ecosystem_herds_graze_breed_and_stay_bounded() -> void:
@@ -134,3 +146,40 @@ func test_ecosystem_herds_graze_breed_and_stay_bounded() -> void:
 	assert_true(sim.total_births > 5, "herd reproduced")
 	assert_between(sheep, 8, 400, "herd population bounded")
 	assert_no_violations(sim, "ecosystem")
+
+
+func test_unit_store_compacts_after_die_off_deterministically() -> void:
+	var sim := TestWorlds.flat(96)
+	for k in 600:
+		sim.spawn_unit(sim.sheep_species, 20.5 + (k % 40), 20.5 + (k / 40), 2.0)
+	var keep := {}
+	for s in sim.units.capacity:
+		if sim.units.alive[s] == 1:
+			if s % 10 == 0:
+				keep[sim.units.id[s]] = sim.units.name[s]
+			else:
+				sim.kill_unit(s, "test")
+	var cap_before := sim.units.capacity
+	var copy := sim.clone()
+	run_ticks(sim, SimConst.TICKS_PER_YEAR)
+	run_ticks(copy, SimConst.TICKS_PER_YEAR)
+	assert_true(sim.units.capacity < cap_before, "capacity shrank (%d -> %d)" % [cap_before, sim.units.capacity])
+	assert_eq(copy.state_hash(), sim.state_hash(), "compaction is deterministic across reload")
+	assert_no_violations(sim, "after compaction")
+
+
+func test_deceased_eviction_is_fifo_and_cheap() -> void:
+	var sim := TestWorlds.flat(64)
+	var first_ids: Array = []
+	var t0 := Time.get_ticks_msec()
+	for k in Simulation.DECEASED_CAP + 300:
+		var s := sim.spawn_unit(sim.human_species, 20.5, 20.5, 20.0)
+		if k < 5:
+			first_ids.append(sim.units.id[s])
+		sim.kill_unit(s, "test")
+	var ms := Time.get_ticks_msec() - t0
+	assert_eq(sim.deceased.size(), Simulation.DECEASED_CAP)
+	for id: int in first_ids:
+		assert_false(sim.deceased.has(id), "oldest records evicted first")
+	note("%d spawn+kill cycles with eviction in %d ms" % [Simulation.DECEASED_CAP + 300, ms])
+	assert_true(ms < 8000, "eviction is not quadratic")

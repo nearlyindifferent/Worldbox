@@ -18,6 +18,7 @@ const JOIN_SEARCH_RADIUS := 40.0
 const TOP_UP_HUNGER := 25.0
 const FARM_CARRY_LIMIT := 10.0
 const FARM_HOP_RADIUS := 6.0
+const MIN_HERD_TO_HUNT := 5
 
 var sim: Simulation
 var _def: Defs.SpeciesDef
@@ -220,8 +221,8 @@ func _hunt(s: int) -> bool:
 		if d < best_d:
 			best_d = d
 			best = p
-	# Only hunt herds of 3+ so a hunter cannot wipe out the last local breeders.
-	if best < 0 or prey.size() < 3:
+	# Only hunt herds of MIN_HERD_TO_HUNT+ so hunters cannot wipe out the last local breeders.
+	if best < 0 or prey.size() < MIN_HERD_TO_HUNT:
 		return false
 	var ok := _go(s, int(u.y[best]) * sim.world.width + int(u.x[best]), UnitStore.Task.HUNT)
 	u.task_target[s] = best

@@ -20,6 +20,9 @@ const VEG_CYCLE_TICKS := 60
 const CITY_PLAN_INTERVAL := 30
 ## Max A* path requests served per tick. Excess requests wait a tick.
 const PATH_BUDGET_PER_TICK := 48
+## Total octile tile-distance of A* requests served per tick (see Pathfinder.work_left).
+## The first request of a tick is always served so long routes cannot starve.
+const PATH_WORK_BUDGET_PER_TICK := 900
 
 const HUNGER_EAT_THRESHOLD := 50.0
 const HUNGER_URGENT := 75.0

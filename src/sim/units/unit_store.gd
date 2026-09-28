@@ -199,3 +199,58 @@ func from_dict(d: Dictionary) -> void:
 	for s in capacity:
 		if alive[s] == 1:
 			slot_of[id[s]] = s
+
+
+## Compaction keeps per-tick loops proportional to the living population after a
+## die-off (capacity otherwise never shrinks). Deterministic: runs at year ticks.
+func should_compact() -> bool:
+	return capacity > 256 and count < capacity / 2
+
+
+func compact() -> void:
+	var remap := PackedInt32Array()
+	remap.resize(capacity)
+	remap.fill(-1)
+	var n := 0
+	for s in capacity:
+		if alive[s] == 1:
+			remap[s] = n
+			n += 1
+	var new_cap := maxi(64, nearest_po2(n + n / 4 + 1))
+	for f in _array_fields():
+		var old: Variant = get(f)
+		var arr: Variant = old.duplicate()
+		arr.resize(new_cap)
+		for s in capacity:
+			var t := remap[s]
+			if t >= 0:
+				arr[t] = old[s]
+		for t in range(n, new_cap):
+			arr[t] = _blank(f)
+		set(f, arr)
+	# Slot-valued references: hunting targets (task_target holds a prey slot).
+	for t in n:
+		if task[t] == Task.HUNT:
+			var tgt := task_target[t]
+			task_target[t] = remap[tgt] if tgt >= 0 and tgt < capacity else -1
+	var new_path := {}
+	for s: int in path:
+		if remap[s] >= 0:
+			new_path[remap[s]] = path[s]
+	path = new_path
+	capacity = new_cap
+	_free = PackedInt32Array()
+	for s in range(new_cap - 1, n - 1, -1):
+		_free.append(s)
+	slot_of.clear()
+	for s in n:
+		slot_of[id[s]] = s
+
+
+static func _blank(field: String) -> Variant:
+	match field:
+		"name":
+			return ""
+		"x", "y", "prev_x", "prev_y", "health", "max_health", "hunger", "carry_amount":
+			return 0.0
+	return 0
