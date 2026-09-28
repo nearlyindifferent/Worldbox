@@ -32,12 +32,19 @@ const DECLARE_CHANCE := 0.25
 const PEACE_CHANCE := 0.35
 const GRIEVANCE_PER_DEATH := 2.0
 const GRIEVANCE_DECAY := 0.97
+const NEIGHBOUR_RANGE := 90.0
+const PEACE_BONUS_CAP := 8.0
 const COVET_RATIO := 1.4
 const COVET_OPINION := -12.0
 
 var sim: Simulation
 ## "min:max" -> diplomatic record between two kingdoms (see _new_pair).
 var pairs: Dictionary = {}
+## Derived: kingdom id -> ids it is at war with (rebuilt whenever a war starts/ends).
+var _enemies: Dictionary = {}
+## Derived: kingdom id -> fighting strength, cached for the current tick.
+var _strength: Dictionary = {}
+var _strength_tick: int = -1
 
 
 func _init(p_sim: Simulation) -> void:
@@ -71,14 +78,22 @@ func at_war(a: int, b: int) -> bool:
 
 
 func enemies_of(k: int) -> PackedInt32Array:
-	var out := PackedInt32Array()
-	for p: Dictionary in pairs.values():
+	return _enemies.get(k, PackedInt32Array())
+
+
+func _rebuild_enemies() -> void:
+	_enemies.clear()
+	for key: String in pairs:
+		var p: Dictionary = pairs[key]
 		if p["war"]:
-			if int(p["a"]) == k:
-				out.append(int(p["b"]))
-			elif int(p["b"]) == k:
-				out.append(int(p["a"]))
-	return out
+			var a := int(p["a"])
+			var b := int(p["b"])
+			var ea: PackedInt32Array = _enemies.get(a, PackedInt32Array())
+			ea.append(b)
+			_enemies[a] = ea
+			var eb: PackedInt32Array = _enemies.get(b, PackedInt32Array())
+			eb.append(a)
+			_enemies[b] = eb
 
 
 func is_at_war(k: int) -> bool:
@@ -113,8 +128,17 @@ func population(k: Kingdom) -> int:
 	return n
 
 
-## Adults able to fight (all adult members).
+## Adults able to fight (all adult members); cached for the current tick.
 func strength(k: Kingdom) -> int:
+	if _strength_tick != sim.tick:
+		_strength.clear()
+		_strength_tick = sim.tick
+	if not _strength.has(k.id):
+		_strength[k.id] = _count_strength(k)
+	return _strength[k.id]
+
+
+func _count_strength(k: Kingdom) -> int:
 	var u := sim.units
 	var adult := float((Defs.species[sim.human_species] as Defs.SpeciesDef).adult_age)
 	var n := 0
@@ -214,6 +238,7 @@ func _fall(k: Kingdom, reason: String) -> void:
 		var p: Dictionary = pairs[key]
 		if int(p["a"]) == k.id or int(p["b"]) == k.id:
 			pairs.erase(key)
+	_rebuild_enemies()
 	sim.history.record(sim.tick, HistoryLog.Kind.KINGDOM_FALLEN, "The %s fell: %s." % [k.name, reason], {"kingdom": k.id})
 	sim.decisions.record(sim.tick, "war", k.name, "fell", [["reason", reason]], {"kingdom": k.id})
 
@@ -283,7 +308,7 @@ func _update_loyalty(k: Kingdom) -> void:
 			c.loyalty = 100.0
 			continue
 		var d := cp.distance_to(Vector2(c.center % w, c.center / w))
-		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4 + temper
+		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 3) * 3.0 - k.exhaustion * 0.4 + temper
 		if sim.civ.has_building(c, "temple"):
 			target += float(Defs.building_by_id("temple").raw.get("loyalty", 10))
 		c.loyalty = clampf(c.loyalty + (clampf(target, 0.0, 100.0) - c.loyalty) * 0.1, 0.0, 100.0)
@@ -303,11 +328,14 @@ func _update_relations() -> void:
 		for j in range(i + 1, ks.size()):
 			var a: Kingdom = ks[i]
 			var b: Kingdom = ks[j]
-			var p := pair(a.id, b.id)
 			var dmin := INF
 			for pa: Vector2 in centers[a.id]:
 				for pb: Vector2 in centers[b.id]:
 					dmin = minf(dmin, pa.distance_to(pb))
+			# Distant realms with no shared history have no relations to track.
+			if dmin > NEIGHBOUR_RANGE and not pairs.has(pair_key(a.id, b.id)):
+				continue
+			var p := pair(a.id, b.id)
 			var reasons: Array = []
 			var total := 0.0
 			if dmin < BORDER_RANGE:
@@ -322,7 +350,7 @@ func _update_relations() -> void:
 				reasons.append(["grievances from bloodshed", -float(p["grievance"])])
 				total -= float(p["grievance"])
 			if not p["war"]:
-				var peace_years := minf(15.0, float(sim.tick - int(p["last_peace"])) / SimConst.TICKS_PER_YEAR)
+				var peace_years := minf(PEACE_BONUS_CAP, 0.5 * float(sim.tick - int(p["last_peace"])) / SimConst.TICKS_PER_YEAR)
 				reasons.append(["years of peace", peace_years])
 				total += peace_years
 			# A much stronger neighbour covets the weaker one's land.
@@ -359,6 +387,7 @@ func _update_wars() -> void:
 		var b: Kingdom = sim.kingdoms.get(int(p["b"]), null)
 		if a == null or b == null:
 			pairs.erase(key)
+			_rebuild_enemies()
 			continue
 		if p["war"]:
 			_war_month(p, a, b)
@@ -398,6 +427,7 @@ func declare_war(att: Kingdom, def: Kingdom, reasons: Array) -> void:
 		return
 	p["war"] = true
 	p["war_start"] = sim.tick
+	_rebuild_enemies()
 	p["casualties"] = [0, 0]
 	p["cities_lost"] = [0, 0]
 	_retarget(p)
@@ -411,6 +441,7 @@ func make_peace(a: Kingdom, b: Kingdom, reasons: Array) -> void:
 		return
 	p["war"] = false
 	p["last_peace"] = sim.tick
+	_rebuild_enemies()
 	p["grievance"] = float(p["grievance"]) * 0.5
 	p["targets"] = [-1, -1]
 	sim.history.record(sim.tick, HistoryLog.Kind.PEACE, "The %s and the %s made peace after %.1f years of war." % [a.name, b.name, float(sim.tick - int(p["war_start"])) / SimConst.TICKS_PER_YEAR], {"kingdom": a.id, "enemy": b.id}, _capital_tile(a))
@@ -560,3 +591,4 @@ func to_dict() -> Dictionary:
 
 func from_dict(d: Dictionary) -> void:
 	pairs = d.get("pairs", {})
+	_rebuild_enemies()

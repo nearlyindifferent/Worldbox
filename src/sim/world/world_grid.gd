@@ -24,6 +24,8 @@ var chunk_rev := PackedInt32Array()
 var owner_rev: int = 0
 ## Tiles whose walkability changed since last drain (consumed by the pathfinder).
 var walk_changed := PackedInt32Array()
+## Tiles whose walking cost changed (pathfinder weights only; not saved, drained each tick).
+var cost_changed := PackedInt32Array()
 
 
 func _init(w: int = 0, h: int = 0) -> void:
@@ -99,6 +101,8 @@ func set_biome(i: int, b: int) -> void:
 		vegetation[i] = vmax
 	if Defs.biome_walkable[old] != Defs.biome_walkable[b]:
 		walk_changed.append(i)
+	elif Defs.biome_move_cost[old] != Defs.biome_move_cost[b]:
+		cost_changed.append(i)
 	mark_dirty(i)
 
 

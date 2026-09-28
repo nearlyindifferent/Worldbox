@@ -147,6 +147,7 @@ func _after_change(i: int, old_b: int) -> void:
 	if w.biome[i] != old_b:
 		sim.pathfinder.refresh_tile_cost(i)
 		sim.civ.on_tile_changed(i)
+		sim.disasters.on_tile_changed(i)
 
 
 func can_undo() -> bool:

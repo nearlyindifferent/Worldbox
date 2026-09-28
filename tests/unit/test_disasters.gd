@@ -184,3 +184,47 @@ func test_a_wildfire_does_not_wipe_out_a_town() -> void:
 	run_ticks(sim, 900)
 	assert_true(sim.cities.has(c.id), "the stone town hall survives, so the town endures")
 	assert_no_violations(sim, "after the town fire")
+
+
+func test_a_town_that_loses_its_hall_rebuilds_it() -> void:
+	var sim := TestWorlds.flat(96)
+	sim.laws.set_law("natural_disasters", false)
+	var band := TestWorlds.add_band(sim, 40.5, 40.5, 12)
+	var c := sim.civ.found_city(band[0], sim.world.idx(40, 40), [])
+	var hall := -1
+	for bid in c.buildings:
+		if (sim.buildings[bid] as Building).def().id == "town_hall":
+			hall = bid
+	sim.civ.destroy_building(hall, "test")
+	assert_true(sim.cities.has(c.id), "the town survives the loss of its hall")
+	assert_eq(sim.civ.count_complete(c, "town_hall"), 1, "a new hall stands")
+	assert_eq(sim.world.building[c.center], (sim.buildings[c.buildings[c.buildings.size() - 1]] as Building).id, "the town centre moved to the new hall")
+	run_ticks(sim, 200)
+	assert_no_violations(sim, "after rebuilding")
+
+
+func test_undo_restored_lava_still_cools_and_paint_douses_fire() -> void:
+	var sim := TestWorlds.flat(96)
+	sim.laws.set_law("natural_disasters", false)
+	sim.apply_command({"op": "brush", "power": "volcano", "x": 40, "y": 40, "radius": 1})
+	run_ticks(sim, 6)
+	sim.apply_command({"op": "stroke_begin"})
+	sim.apply_command({"op": "brush", "power": "paint_grass", "x": 40, "y": 40, "radius": 3})
+	sim.apply_command({"op": "stroke_end"})
+	sim.apply_command({"op": "undo"})
+	assert_no_violations(sim, "after undoing paint over lava")
+	run_ticks(sim, DisasterSystem.LAVA_COOL_STEPS * DisasterSystem.FIRE_STEP + 60)
+	var lava := 0
+	for i in sim.world.size:
+		if sim.world.biome[i] == Defs.biome_index("lava"):
+			lava += 1
+	assert_eq(lava, 0, "restored lava cooled")
+	# Painting sea over a burning forest puts the fire out.
+	var w := sim.world
+	var i := w.idx(85, 20)
+	sim.disasters.ignite(i)
+	sim.apply_command({"op": "stroke_begin"})
+	sim.apply_command({"op": "brush", "power": "paint_ocean", "x": 85, "y": 20, "radius": 0})
+	sim.apply_command({"op": "stroke_end"})
+	assert_false(sim.disasters.is_burning(i), "the sea put the fire out")
+	assert_no_violations(sim, "after dousing")

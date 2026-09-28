@@ -152,4 +152,13 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 		if dis.on_fire[i] != 1:
 			errs.append("burning tile %d not marked" % i)
 			break
+	# Every lava tile must be tracked, or it would never cool.
+	var lava_b := Defs.biome_index("lava")
+	var tracked := {}
+	for i in dis.lava:
+		tracked[i] = true
+	for i in w.size:
+		if w.biome[i] == lava_b and not tracked.has(i):
+			errs.append("lava tile %d is not tracked" % i)
+			break
 	return _done(errs)

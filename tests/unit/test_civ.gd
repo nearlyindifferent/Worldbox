@@ -163,14 +163,15 @@ func test_leader_succession() -> void:
 	assert_true(sim.units.is_alive_id(c.leader_id), "new leader alive")
 
 
-func test_city_abandoned_when_town_hall_flooded() -> void:
+func test_city_abandoned_when_all_its_land_floods() -> void:
+	# (A town that only loses its hall rebuilds it; see test_disasters.)
 	var sim := TestWorlds.flat(96)
 	TestWorlds.add_band(sim, 40.5, 40.5, 6)
 	run_ticks(sim, 200)
 	var c: City = sim.cities.values()[0]
 	var hall: Building = sim.buildings[c.buildings[0]]
 	sim.apply_command({"op": "stroke_begin"})
-	sim.apply_command({"op": "brush", "power": "paint_ocean", "x": hall.x, "y": hall.y, "radius": 3})
+	sim.apply_command({"op": "brush", "power": "paint_ocean", "x": hall.x, "y": hall.y, "radius": GodCommands.MAX_BRUSH_RADIUS})
 	sim.apply_command({"op": "stroke_end"})
 	sim.step()
 	assert_eq(sim.cities.size(), 0, "city abandoned")

@@ -761,7 +761,25 @@ func destroy_building(bid: int, reason: String) -> void:
 	_recompute_capacity(c)
 	sim.history.record(sim.tick, HistoryLog.Kind.BUILDING, "A %s of %s was destroyed (%s)." % [b.def().name.to_lower(), c.name, reason], {"city": c.id}, b.center_tile(w.width))
 	if b.def().storage and not _has_storage(c):
-		abandon_city(c, "its town hall was destroyed")
+		if not (c.population() > 0 and _rebuild_hall(c)):
+			abandon_city(c, "its town hall was destroyed")
+
+
+## Survivors raise a new hall (half the stored goods are lost) instead of abandoning
+## the town. Returns false when there is nowhere to build it.
+func _rebuild_hall(c: City) -> bool:
+	var hall_type := Defs.building_by_id("town_hall").index
+	var site := _find_site(c, Defs.buildings[hall_type].size)
+	if site < 0:
+		return false
+	var w := sim.world
+	var hall := _place_building(c, hall_type, site % w.width, site / w.width, true)
+	c.center = hall.center_tile(w.width)
+	for res: String in c.storage:
+		c.storage[res] = float(c.storage[res]) * 0.5
+	_recompute_capacity(c)
+	sim.history.record(sim.tick, HistoryLog.Kind.BUILDING, "The people of %s raised a new town hall from the ruins." % c.name, {"city": c.id}, c.center)
+	return true
 
 
 func _has_storage(c: City) -> bool:

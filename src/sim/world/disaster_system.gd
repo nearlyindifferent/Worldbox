@@ -60,6 +60,8 @@ var quakes: Array = []            ## [{"x", "y", "r", "left"}]
 var last_record: Dictionary = {}  ## event key -> tick of its last chronicle entry
 ## Derived: 1 where a tile is burning.
 var on_fire := PackedByteArray()
+## Derived: false once a plague pass found nobody sick (skips the scan until infect()).
+var _any_sick := true
 var _flam := PackedFloat32Array()
 var _fuel := PackedInt32Array()
 var _scorched: int = -1
@@ -182,6 +184,23 @@ func extinguish_area(x: int, y: int, r: int) -> int:
 	return n
 
 
+## Keeps fire and lava bookkeeping in step with terrain edits and undo: painting
+## a tile with nothing to burn puts its fire out, and restored lava cools again.
+func on_tile_changed(i: int) -> void:
+	var b := sim.world.biome[i]
+	if on_fire[i] == 1 and _fuel[b] == 0:
+		var k := burning.find(i)
+		if k >= 0:
+			burning.remove_at(k)
+			fuel.remove_at(k)
+		on_fire[i] = 0
+		sim.world.mark_dirty(i)
+	if b == _lava_b and not lava.has(i):
+		lava.append(i)
+		lava_t.append(LAVA_COOL_STEPS)
+		lava_flow.append(0)
+
+
 func _fire_step() -> void:
 	var w := sim.world
 	var width := w.width
@@ -246,14 +265,13 @@ func _burn_out(i: int) -> void:
 	var w := sim.world
 	on_fire[i] = 0
 	var b := w.biome[i]
-	if b == Defs.farmland_index:
-		w.vegetation[i] = 0
-	elif b != _scorched and b != _ash and Defs.biome_walkable[b] == 1 and b != Defs.biome_index("snow"):
+	# Grass and woods burn to scorched ground (which regrows as grass); other land
+	# keeps its nature (hills keep their stone, swamps stay swamps) and just loses
+	# its vegetation.
+	if b == Defs.forest_index or b == Defs.grassland_index:
 		w.set_biome(i, _scorched)
-		w.vegetation[i] = 0
 		sim.pathfinder.refresh_tile_cost(i)
-	else:
-		w.vegetation[i] = 0
+	w.vegetation[i] = 0
 	w.mark_dirty(i)
 
 
@@ -263,7 +281,21 @@ func _fire_units() -> void:
 	var w := sim.world
 	var width := w.width
 	var dead := PackedInt32Array()
-	for s in u.capacity:
+	# Only creatures in chunks that hold fire can be near it (the spatial query
+	# pads by a chunk), so cost scales with the fire, not the population.
+	var chunks := {}
+	var cs := SimConst.CHUNK
+	for i in burning:
+		chunks[(i / width / cs) * w.chunks_x + (i % width) / cs] = true
+	var cand := {}
+	var ckeys := chunks.keys()
+	ckeys.sort()
+	for ck: int in ckeys:
+		for s in sim.spatial.slots_in_rect(Rect2(Vector2(ck % w.chunks_x, ck / w.chunks_x) * cs, Vector2(cs, cs))):
+			cand[s] = true
+	var slots := cand.keys()
+	slots.sort()
+	for s: int in slots:
 		if u.alive[s] == 0:
 			continue
 		var x := int(u.x[s])
@@ -540,6 +572,7 @@ func infect(s: int) -> bool:
 	if u.alive[s] == 0 or u.disease[s] > 0 or u.has_flag(s, UnitStore.Flag.IMMUNE) or u.has_flag(s, UnitStore.Flag.INVULNERABLE):
 		return false
 	u.disease[s] = PLAGUE_TICKS
+	_any_sick = true
 	return true
 
 
@@ -559,6 +592,9 @@ func _temple_factor(city_id: int, cache: Dictionary) -> float:
 
 
 func _plague_spread() -> void:
+	if not _any_sick:
+		return
+	_any_sick = false
 	var u := sim.units
 	var dead := PackedInt32Array()
 	var newly := PackedInt32Array()
@@ -566,6 +602,7 @@ func _plague_spread() -> void:
 	for s in u.capacity:
 		if u.alive[s] == 0 or u.disease[s] <= 0:
 			continue
+		_any_sick = true
 		u.disease[s] = maxi(0, u.disease[s] - PLAGUE_SPREAD_EVERY)
 		var care := _temple_factor(u.city[s], temples)
 		u.health[s] -= PLAGUE_DAMAGE * PLAGUE_SPREAD_EVERY * frailty(u.id[s]) * care * (1.6 if Traits.has(u.traits[s], Traits.SICKLY) else 1.0)

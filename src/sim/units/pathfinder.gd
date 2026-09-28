@@ -53,6 +53,9 @@ func sync_changes() -> void:
 	var changed := _world.drain_walk_changes()
 	for i in changed:
 		_apply_tile(i)
+	for i in _world.cost_changed:
+		_apply_tile(i)
+	_world.cost_changed.clear()
 	if changed.size() > 0:
 		components_dirty = true
 
