@@ -5,7 +5,7 @@ extends Camera2D
 
 signal moved
 
-const MIN_ZOOM := 0.25
+const MIN_ZOOM := 0.3
 const MAX_ZOOM := 8.0
 const KEY_PAN_SPEED := 900.0
 const ZOOM_STEP := 1.15
@@ -113,8 +113,7 @@ func _process(delta: float) -> void:
 			follow_callable = Callable()
 		else:
 			target_pos = p
-	var margin := get_viewport_rect().size * 0.25 / maxf(zoom.x, 0.01)
-	target_pos = target_pos.clamp(-margin, world_px + margin)
+	target_pos = _clamp_to_world(target_pos, target_zoom)
 	var k := 1.0 - exp(-SMOOTH * delta)
 	var old := position
 	position = position.lerp(target_pos, k)
@@ -122,6 +121,19 @@ func _process(delta: float) -> void:
 	zoom = Vector2(z, z)
 	if old.distance_squared_to(position) > 0.01 or absf(z - target_zoom) > 0.0001:
 		moved.emit()
+
+
+## Keeps the view inside the world (plus a small shore margin); centers the axis
+## when the world is smaller than the view at the current zoom.
+func _clamp_to_world(p: Vector2, z: float) -> Vector2:
+	var half := get_viewport_rect().size * 0.5 / maxf(z, 0.01)
+	var margin := Vector2(48, 48)
+	var out := p
+	for axis in 2:
+		var lo := half[axis] - margin[axis]
+		var hi := world_px[axis] - half[axis] + margin[axis]
+		out[axis] = world_px[axis] * 0.5 if lo > hi else clampf(p[axis], lo, hi)
+	return out
 
 
 func _text_focused() -> bool:

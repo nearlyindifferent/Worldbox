@@ -49,12 +49,13 @@ func _ready() -> void:
 	hover_label = Label.new()
 	hover_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hover_panel.add_child(hover_label)
+	hover_panel.visible = false
 	add_child(hover_panel)
 
 	toasts = VBoxContainer.new()
 	toasts.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	toasts.position = Vector2(-300, 70)
-	toasts.custom_minimum_size = Vector2(600, 0)
+	toasts.position = Vector2(-240, 64)
+	toasts.custom_minimum_size = Vector2(480, 0)
 	toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
 	toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(toasts)
@@ -79,6 +80,26 @@ func _ready() -> void:
 	_layout()
 
 
+var _hover_tile := Vector2i(-1, -1)
+var _hover_timer := 0.0
+
+
+func _process(delta: float) -> void:
+	# Keep the tile readout truthful after edits/undo, and dock the perf overlay
+	# beside whichever left panel is open so panels never overlap.
+	_hover_timer += delta
+	if _hover_timer > 0.25:
+		_hover_timer = 0.0
+		if hover_panel.visible:
+			on_hover_tile(_hover_tile)
+	var left_w := 0.0
+	if admin.visible:
+		left_w = admin.size.x + 8
+	elif history.visible:
+		left_w = history.size.x + 8
+	perf.position = Vector2(8 + left_w, 60)
+
+
 func _layout() -> void:
 	var vp := get_viewport_rect().size
 
@@ -86,6 +107,7 @@ func _layout() -> void:
 
 
 func on_hover_tile(t: Vector2i) -> void:
+	_hover_tile = t
 	var sim := game.sim
 	hover_panel.visible = sim.world.in_bounds(t.x, t.y)
 	if not hover_panel.visible:
@@ -107,13 +129,21 @@ func on_key(k: InputEventKey) -> void:
 		KEY_F3:
 			perf.visible = not perf.visible
 		KEY_T:
-			history.visible = not history.visible
+			toggle_history()
 
 
+## The chronicle and the admin console share the left dock; opening one closes the other.
 func toggle_admin() -> void:
 	admin.visible = not admin.visible
 	if admin.visible:
+		history.visible = false
 		admin.refresh_all()
+
+
+func toggle_history() -> void:
+	history.visible = not history.visible
+	if history.visible:
+		admin.visible = false
 
 
 func toggle_menu() -> void:
@@ -125,6 +155,11 @@ func toggle_menu() -> void:
 func show_toast(msg: String, good: bool = true) -> void:
 	if msg.is_empty():
 		return
+	for existing in toasts.get_children():
+		var lbl := existing.get_child(0) as Label
+		if lbl != null and lbl.text == msg and not existing.is_queued_for_deletion():
+			existing.modulate.a = 1.0
+			return
 	var p := PanelContainer.new()
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := UiTheme.box(Color("#1c1512", 0.92), UiTheme.GOLD.darkened(0.2) if good else UiTheme.BAD, Color(0, 0, 0, 0), 8)

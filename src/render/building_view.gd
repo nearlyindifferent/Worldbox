@@ -43,4 +43,4 @@ static func _frame_for(b: Building) -> int:
 		"granary":
 			return AssetForge.BF.GRANARY
 		_:
-			return AssetForge.BF.HOUSE_B if b.id % 3 == 0 else AssetForge.BF.HOUSE
+			return [AssetForge.BF.HOUSE, AssetForge.BF.HOUSE_B, AssetForge.BF.HOUSE_C, AssetForge.BF.HOUSE_D][(b.id * 7 + b.x) % 4]

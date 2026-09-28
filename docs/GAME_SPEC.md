@@ -55,7 +55,7 @@ Everything outside this table is **not implemented yet** — see `FEATURE_MATRIX
 | Left click / drag | Use selected power (Inspect selects) |
 | Right or middle drag, WASD/arrows, trackpad | Pan |
 | Wheel / pinch | Zoom toward cursor |
-| Space, 1–5 | Pause, speeds |
+| Space, 1–4 | Pause / resume, speeds 1×, 2×, 5×, 10× |
 | [ ] or - = | Brush size |
 | Ctrl+Z | Undo terrain stroke |
 | Q R F H J X | Inspect, Raise, Lower, Humans, Woolbacks, Smite |

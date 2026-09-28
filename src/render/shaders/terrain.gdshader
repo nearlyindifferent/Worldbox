@@ -59,6 +59,25 @@ void fragment() {
 	} else if (b == forest_index && wood < 2) {
 		col = 4 + wood;
 	}
+	// Dithered biome transitions: pixels in the outer two rows of a land tile may
+	// take the art of a different neighbouring land biome, breaking stair-step edges.
+	if (!is_water(b) && b != farmland_index) {
+		float hsh = hash12(vec2(t) * 8.0 + vec2(px));
+		ivec2 nb_dir = ivec2(0);
+		float edge = 0.0;
+		if (px.x <= 1) { nb_dir = ivec2(-1, 0); edge = float(2 - px.x); }
+		else if (px.x >= 6) { nb_dir = ivec2(1, 0); edge = float(px.x - 5); }
+		if (px.y <= 1 && float(2 - px.y) > edge) { nb_dir = ivec2(0, -1); edge = float(2 - px.y); }
+		else if (px.y >= 6 && float(px.y - 5) > edge) { nb_dir = ivec2(0, 1); edge = float(px.y - 5); }
+		if (edge > 0.0) {
+			ivec4 nd = texel_i(data_tex, t + nb_dir);
+			int nb = nd.r;
+			if (nb != b && !is_water(nb) && nb != farmland_index && hsh < 0.22 * edge) {
+				b = nb;
+				col = nd.g & 3;
+			}
+		}
+	}
 	vec4 c = texelFetch(atlas, ivec2(col * 8 + px.x, b * 8 + px.y), 0);
 
 	if (b == grass_index && veg < 2) {

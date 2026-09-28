@@ -11,6 +11,8 @@ var _body := VBoxContainer.new()
 var _scroll := ScrollContainer.new()
 var _timer := 0.0
 var _live: Dictionary = {}  ## key -> Control refreshed in place
+var _show_all_children := false
+var _last_selected := -2
 
 
 func _ready() -> void:
@@ -60,6 +62,9 @@ func _clear() -> void:
 
 
 func _rebuild() -> void:
+	if game.selected_unit != _last_selected:
+		_show_all_children = false
+		_last_selected = game.selected_unit
 	_clear()
 	if game.sim == null:
 		visible = false
@@ -142,9 +147,17 @@ func _bar(label_text: String, key: String, color: Color) -> void:
 	pb.show_percentage = false
 	var fill := UiTheme.box(color, Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0)
 	pb.add_theme_stylebox_override("fill", fill)
+	var val := Label.new()
+	val.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	val.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	val.add_theme_constant_override("outline_size", 4)
+	val.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	pb.add_child(val)
 	h.add_child(pb)
 	_body.add_child(h)
 	_live[key] = pb
+	_live[key + "_val"] = val
 
 
 func _section(title: String) -> void:
@@ -189,6 +202,7 @@ func _build_unit() -> void:
 	frame_bg.add_child(portrait)
 	head.add_child(frame_bg)
 	var names := VBoxContainer.new()
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	names.add_child(UiTheme.label(u.name[s], "TitleLabel"))
 	names.add_child(UiTheme.label("%s, %s" % [def.name.trim_suffix("s"), "female" if u.sex[s] == 1 else "male"], "MutedLabel"))
 	var age_l := UiTheme.label("")
@@ -202,8 +216,15 @@ func _build_unit() -> void:
 	follow.text = "Follow"
 	follow.icon = UiTheme.icon("follow")
 	follow.focus_mode = Control.FOCUS_NONE
-	follow.pressed.connect(game.follow_selected)
+	follow.toggle_mode = true
+	follow.tooltip_text = "Keep the camera on this creature  [Shift+F]"
+	follow.toggled.connect(func(on: bool) -> void:
+		if on:
+			game.follow_selected()
+		else:
+			game.camera.follow(Callable()))
 	btns.add_child(follow)
+	_live["follow"] = follow
 	var fav := Button.new()
 	fav.text = "Favorite"
 	fav.icon = UiTheme.icon("star")
@@ -242,8 +263,10 @@ func _build_unit() -> void:
 		_row("Children", "", "%d" % kids.size())
 		var shown := 0
 		for kid in kids:
-			if shown >= 8:
-				_row("", "", "... and %d more" % (kids.size() - shown))
+			if shown >= 8 and not _show_all_children:
+				_link_row("", "... show all %d" % kids.size(), func() -> void:
+					_show_all_children = true
+					_rebuild())
 				break
 			var kid_id := kid
 			_link_row("", _unit_name(kid), func() -> void: _select_any(kid_id))
@@ -274,14 +297,19 @@ func _refresh_unit() -> void:
 	var def: Defs.SpeciesDef = Defs.species[u.species[s]]
 	var age := u.age_years(s, sim.tick)
 	_set_text("age", "Age %d%s" % [int(age), "" if age >= def.adult_age else " (young)"])
+	if _live.has("follow"):
+		(_live["follow"] as Button).set_pressed_no_signal(game.is_following())
 	var hp := _live["health"] as ProgressBar
 	hp.max_value = u.max_health[s]
 	hp.value = u.health[s]
-	hp.tooltip_text = "%.0f / %.0f" % [u.health[s], u.max_health[s]]
+	hp.tooltip_text = "%d / %d" % [roundi(u.health[s]), roundi(u.max_health[s])]
+	_set_text("health_val", hp.tooltip_text)
 	var hu := _live["hunger"] as ProgressBar
 	hu.max_value = SimConst.HUNGER_MAX
 	hu.value = u.hunger[s]
-	hu.tooltip_text = "%.0f / 100. Eats at %d, starves at 100." % [u.hunger[s], int(SimConst.HUNGER_EAT_THRESHOLD)]
+	hu.tooltip_text = "Hunger %d / 100. Eats at %d, starves at 100." % [roundi(u.hunger[s]), int(SimConst.HUNGER_EAT_THRESHOLD)]
+	var mood := "fed" if u.hunger[s] < SimConst.HUNGER_EAT_THRESHOLD else ("STARVING" if u.hunger[s] >= SimConst.HUNGER_MAX else "hungry")
+	_set_text("hunger_val", "%d  %s" % [roundi(u.hunger[s]), mood])
 	var st := "moving" if u.state[s] == UnitStore.State.MOVING else ("working" if u.state[s] == UnitStore.State.WORKING else "idle")
 	_set_text("task", "%s (%s)" % [UnitStore.TASK_NAMES[u.task[s]], st])
 	_set_text("carry", "nothing" if u.carry_amount[s] <= 0.0 else "%.1f %s" % [u.carry_amount[s], UnitStore.RESOURCE_NAMES[u.carry_type[s]]])
@@ -325,7 +353,10 @@ func _build_city() -> void:
 	head.add_child(swatch)
 	var names := VBoxContainer.new()
 	names.add_child(UiTheme.label(c.name, "TitleLabel"))
-	names.add_child(UiTheme.label("%s settlement, founded %s" % [(Defs.species[c.species] as Defs.SpeciesDef).name.trim_suffix("s"), sim.date_string(c.founded_tick)], "MutedLabel"))
+	var sub := UiTheme.label("%s settlement\nfounded %s" % [(Defs.species[c.species] as Defs.SpeciesDef).name.trim_suffix("s"), sim.date_string(c.founded_tick)], "MutedLabel")
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	names.add_child(sub)
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(names)
 	_body.add_child(head)
 	var leader_id := c.leader_id
@@ -335,7 +366,7 @@ func _build_city() -> void:
 		_row("Leader", "", "none")
 	_row("Population", "pop")
 	_row("Territory", "terr")
-	_section("Stores (last month)")
+	_section("Stores  (hover for last month)")
 	for res in City.RESOURCES:
 		var h := HBoxContainer.new()
 		h.add_child(UiTheme.icon_rect(res, 24))
@@ -374,12 +405,17 @@ func _refresh_city() -> void:
 	var c: City = sim.cities.get(game.selected_city, null)
 	if c == null or not _live.has("pop"):
 		return
-	_set_text("pop", "%d / %d housed   (+%d born, -%d died)" % [c.population(), c.housing, c.births, c.deaths])
+	_set_text("pop", "%d people, housing for %d\n%d born, %d died" % [c.population(), c.housing, c.births, c.deaths])
 	_set_text("terr", "%d tiles" % c.territory.size())
 	for res in City.RESOURCES:
 		var cap := c.food_capacity if res == "food" else float(Defs.building_globals.get("base_%s_capacity" % res, 200))
-		var net := float(c.last_produced[res]) - float(c.last_consumed[res])
-		_set_text("res_" + res, "%d / %d   +%.0f -%.0f  (%s%.0f)" % [int(c.storage[res]), int(cap), c.last_produced[res], c.last_consumed[res], "+" if net >= 0 else "", net])
+		var made := roundi(float(c.last_produced[res]))
+		var used := roundi(float(c.last_consumed[res]))
+		var net := made - used
+		var trend := "steady" if net == 0 else ("%+d/mo" % net)
+		_set_text("res_" + res, "%d / %d   %s" % [roundi(float(c.storage[res])), int(cap), trend])
+		(_live["res_" + res] as Label).tooltip_text = "Last month: +%d made, -%d used" % [made, used]
+		(_live["res_" + res] as Label).mouse_filter = Control.MOUSE_FILTER_PASS
 	var counts := {}
 	var sites := PackedStringArray()
 	for bid in c.buildings:

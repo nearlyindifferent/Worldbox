@@ -25,6 +25,8 @@ func setup(atlas: Image, frame_size: Vector2, cols: int) -> void:
 	multimesh.use_custom_data = true
 	multimesh.mesh = mesh
 	multimesh.instance_count = 0
+	# Instances move every frame; a stale automatic AABB made whole batches get culled.
+	multimesh.custom_aabb = AABB(Vector3(-1.0e6, -1.0e6, -1.0), Vector3(2.0e6, 2.0e6, 2.0))
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://src/render/shaders/sprite.gdshader")
 	var tex := ImageTexture.create_from_image(atlas)

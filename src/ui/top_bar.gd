@@ -34,7 +34,7 @@ func _ready() -> void:
 		b.expand_icon = false
 		b.custom_minimum_size = Vector2(40, 36)
 		b.toggle_mode = true
-		b.tooltip_text = ("Pause  [Space]" if k == 0 else "Speed %dx  [%d]" % [Game.SPEEDS[k], k + 1])
+		b.tooltip_text = ("Pause  [Space]" if k == 0 else "Speed %dx  [%d]" % [Game.SPEEDS[k], k])
 		b.pressed.connect(game.set_speed.bind(k))
 		b.focus_mode = Control.FOCUS_NONE
 		speeds.add_child(b)
@@ -54,7 +54,7 @@ func _ready() -> void:
 	row.add_child(UiTheme.icon_rect("spawn_sheep", 24))
 	row.add_child(_animals)
 	row.add_child(_vsep())
-	for spec: Array in [["history", "Chronicle  [T]", func() -> void: game.ui.history.visible = not game.ui.history.visible],
+	for spec: Array in [["history", "Chronicle  [T]", func() -> void: game.ui.toggle_history()],
 			["save", "Save / Load / New world  [Esc]", func() -> void: game.ui.toggle_menu()],
 			["perf", "Performance overlay  [F3]", func() -> void: game.ui.perf.visible = not game.ui.perf.visible],
 			["admin", "Admin panel  [F1]", func() -> void: game.ui.toggle_admin()]]:

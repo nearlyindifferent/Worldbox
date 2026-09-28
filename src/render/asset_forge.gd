@@ -28,7 +28,7 @@ const MAT_COLORS := {
 enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
-enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B }
+enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D }
 const BLD_ATLAS_COLS := 8
 
 ## City banner colors (index = City.color_index). Hand-picked, distinct hues.
@@ -107,12 +107,17 @@ static func _draw_tile(img: Image, b: Defs.BiomeDef, v: int, ox: int, oy: int, r
 		"hills":
 			for k in 4:
 				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), dark)
-			var hx := rng.randi_range(0, 2)
-			_hline(img, ox + hx + 1, oy + 2, 3, light)
-			_hline(img, ox + hx, oy + 3, 5, light)
-			_hline(img, ox + hx, oy + 4, 5, base)
-			_hline(img, ox + hx, oy + 5, 5, acc)
-			_hline(img, ox + hx + 1, oy + 6, 3, acc)
+			var hx := rng.randi_range(-1, 3)
+			var hy := rng.randi_range(-1, 2)
+			var w5 := rng.randi_range(4, 6)
+			if v != 2:
+				_hline(img, ox + hx + 1, oy + hy + 1, w5 - 2, light)
+				_hline(img, ox + hx, oy + hy + 2, w5, light)
+				_hline(img, ox + hx, oy + hy + 3, w5, base)
+				_hline(img, ox + hx, oy + hy + 4, w5, acc)
+				_hline(img, ox + hx + 1, oy + hy + 5, w5 - 2, acc)
+			for k in 3:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
 		"mountain":
 			var bx := rng.randi_range(-1, 1)
 			for y in 8:
@@ -308,8 +313,10 @@ static func _draw_unit_frame(img: Image, f: int, ox: int, oy: int) -> void:
 				_m(img, ox + x, oy + 5, Mat.STONE, 150 if x == 2 else 128)
 				_m(img, ox + x, oy + 6, Mat.STONE_SHADE)
 		UF.SHADOW:
-			for x in range(2, 6):
+			for x in range(1, 7):
 				_m(img, ox + x, oy + 7, Mat.OUTLINE, 60)
+			for x in range(2, 6):
+				_m(img, ox + x, oy + 6, Mat.OUTLINE, 60)
 
 
 # ---------------------------------------------------------------- buildings
@@ -322,7 +329,55 @@ static func build_building_atlas() -> Image:
 	_granary(img, BF.GRANARY * BLD_W)
 	_site(img, BF.SITE * BLD_W, false)
 	_site(img, BF.FRAME * BLD_W, true)
+	_cottage(img, BF.HOUSE_C * BLD_W)
+	_longhouse(img, BF.HOUSE_D * BLD_W)
 	return img
+
+
+## Stone cottage with a hipped roof, dormer and flower box.
+static func _cottage(img: Image, ox: int) -> void:
+	_rect_m(img, ox + 3, 14, 10, 9, Mat.STONE)
+	_rect_m(img, ox + 10, 14, 3, 9, Mat.STONE_SHADE)
+	for x in range(3, 13, 3):
+		_m(img, ox + x, 17, Mat.STONE_SHADE)
+		_m(img, ox + x + 1, 20, Mat.STONE_SHADE)
+	for y in range(14, 23):
+		_m(img, ox + 2, y, Mat.OUTLINE)
+		_m(img, ox + 13, y, Mat.OUTLINE)
+	for x in range(2, 14):
+		_m(img, ox + x, 23, Mat.OUTLINE)
+	_rect_m(img, ox + 5, 18, 2, 5, Mat.WOOD)
+	_rect_m(img, ox + 9, 16, 2, 2, Mat.WINDOW)
+	_m(img, ox + 9, 18, Mat.BANNER, 120)
+	_m(img, ox + 10, 18, Mat.BANNER, 90)
+	_roof(img, ox, 7, 13, 1, 14, 6)
+	_rect_m(img, ox + 6, 8, 3, 3, Mat.WALL)
+	_m(img, ox + 7, 9, Mat.WINDOW)
+	_m(img, ox + 5, 8, Mat.OUTLINE)
+	_m(img, ox + 9, 8, Mat.OUTLINE)
+
+
+## Low timber longhouse with a thatched roof and log pile.
+static func _longhouse(img: Image, ox: int) -> void:
+	_rect_m(img, ox + 1, 16, 14, 7, Mat.WOOD_LIGHT)
+	for x in range(1, 15, 2):
+		for y in range(16, 23):
+			_m(img, ox + x, y, Mat.WOOD_LIGHT, 105)
+	for y in range(16, 23):
+		_m(img, ox + 0, y, Mat.OUTLINE)
+		_m(img, ox + 15, y, Mat.OUTLINE)
+	for x in range(0, 16):
+		_m(img, ox + x, 23, Mat.OUTLINE)
+	_rect_m(img, ox + 9, 18, 2, 5, Mat.WOOD)
+	_rect_m(img, ox + 3, 18, 2, 2, Mat.WINDOW, 110)
+	_roof(img, ox, 9, 15, 0, 15, 12)
+	for x in range(1, 15, 3):
+		_m(img, ox + x, 11, Mat.ROOF, 90)
+		_m(img, ox + x + 1, 13, Mat.ROOF, 90)
+	_m(img, ox + 13, 21, Mat.WOOD)
+	_m(img, ox + 14, 21, Mat.WOOD_LIGHT)
+	_m(img, ox + 13, 22, Mat.WOOD_LIGHT)
+	_m(img, ox + 14, 22, Mat.WOOD)
 
 
 static func _rect_m(img: Image, x: int, y: int, w: int, h: int, id: int, shade: int = 128) -> void:
@@ -456,15 +511,7 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 	var paper := Color("#f0e2c0")
 	var gold := Color("#e8b84a")
 	if id.begins_with("paint_"):
-		var target: String = TerrainEditor.PAINT[id]
-		var b := Defs.biome(target)
-		# Framed swatch that samples the biome's own tile art.
-		var tiles := build_tile_atlas_cached()
-		for y in 12:
-			for x in 12:
-				img.set_pixel(ox + 2 + x, 2 + y, tiles.get_pixel((x % 8), b.index * TILE + (y % 8)))
-		_frame(img, ox + 1, 1, 14, 14, ink)
-		_hline(img, ox + 2, 2, 12, Color(1, 1, 1, 0.35))
+		_paint_icon(img, id, ox)
 		return
 	match id:
 		"inspect":
@@ -583,6 +630,77 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 			_circle(img, ox + 8, 8, 1, gold, true)
 			_hline(img, ox + 0, 8, 3, paper)
 			_hline(img, ox + 13, 8, 3, paper)
+
+
+## Biome brush icon: a framed ground swatch plus a distinct pictogram so similar
+## colours (forest/hills/swamp, shallow/ocean/deep) remain distinguishable.
+static func _paint_icon(img: Image, id: String, ox: int) -> void:
+	var ink := Color("#241a16")
+	var b := Defs.biome(TerrainEditor.PAINT[id])
+	var c := b.colors
+	for y in 12:
+		for x in 12:
+			var dither := (x + y) % 4 == 0
+			img.set_pixel(ox + 2 + x, 2 + y, c[0] if dither else c[1])
+	_frame(img, ox + 1, 1, 14, 14, ink)
+	var o := ox + 2
+	match TerrainEditor.PAINT[id]:
+		"grassland":
+			for p: Vector2i in [Vector2i(2, 8), Vector2i(5, 5), Vector2i(8, 9), Vector2i(9, 4)]:
+				_px(img, o + p.x, 2 + p.y, c[3])
+				_px(img, o + p.x - 1, 2 + p.y + 1, c[2])
+				_px(img, o + p.x + 1, 2 + p.y + 1, c[2])
+				_px(img, o + p.x, 2 + p.y + 1, c[2])
+		"soil":
+			for y in [3, 6, 9]:
+				_hline(img, o + 1, 2 + y, 10, c[0])
+				_hline(img, o + 2, 2 + y + 1, 8, c[2])
+		"beach":
+			for p: Vector2i in [Vector2i(2, 3), Vector2i(7, 2), Vector2i(4, 7), Vector2i(9, 8), Vector2i(2, 10), Vector2i(6, 10)]:
+				_px(img, o + p.x, 2 + p.y, c[2])
+			_pattern(img, o + 6, 2 + 4, [".##.", "####"], Color("#e8d8b8"))
+		"forest":
+			_tree(img, o + 1, 2 + 1, 4, Color("#16381a"), c[1], c[2], c[3])
+		"hills":
+			_pattern(img, o + 1, 2 + 4, ["..####....", ".######...", "########..", "#########."], c[2])
+			_pattern(img, o + 1, 2 + 7, [".......##.", "......####"], c[3])
+		"mountain":
+			_pattern(img, o + 1, 2 + 1, [".....#....", "....###...", "...##.##..", "..###.###.", ".####.####", "#####.####"], c[2])
+			_pattern(img, o + 1, 2 + 1, [".....#....", "....###..."], Color("#f4f8ff"))
+			for y in range(3, 7):
+				_px(img, o + 6, 2 + y, c[0])
+		"snow":
+			_pattern(img, o + 2, 2 + 2, ["...#...", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "...#..."], Color("#ffffff"))
+		"desert":
+			for x in 10:
+				_px(img, o + 1 + x, 2 + 5 + int(round(sin(x * 0.7) * 1.5)), c[2])
+				_px(img, o + 1 + x, 2 + 9 + int(round(sin(x * 0.7 + 1.5) * 1.5)), c[3])
+			_circle(img, o + 9, 2 + 2, 1, Color("#fff0a0"), true)
+		"swamp":
+			_rect(img, o + 1, 2 + 7, 10, 3, Color("#22403a"))
+			for x in [2, 5, 8]:
+				for y in range(2, 8):
+					_px(img, o + x, 2 + y, c[3])
+				_px(img, o + x, 2 + 2, Color("#8a5a2a"))
+		"volcanic":
+			_pattern(img, o + 1, 2 + 1, ["....##....", "...####...", "..#.##.#..", "...####...", "..######..", ".########."], Color("#2a2224"))
+			_pattern(img, o + 1, 2 + 1, ["....##....", ".....#....", "..........", "....#....."], c[3])
+			_px(img, o + 3, 2 + 10, c[3])
+			_px(img, o + 8, 2 + 9, c[3])
+		"mystic":
+			_pattern(img, o + 3, 2 + 1, ["..#...", ".###..", ".###.#", "#####.", ".###..", "..#..."], c[3])
+			_px(img, o + 4, 2 + 2, Color.WHITE)
+			_px(img, o + 9, 2 + 8, Color.WHITE)
+			_px(img, o + 1, 2 + 9, Color.WHITE)
+		"shallow", "ocean", "deep_ocean":
+			var waves: int = {"shallow": 1, "ocean": 2, "deep_ocean": 3}[TerrainEditor.PAINT[id]]
+			for k in waves:
+				var y: int = 3 + k * 3
+				for x in 10:
+					if (x + k) % 4 != 3:
+						_px(img, o + 1 + x, 2 + y + (1 if (x + k) % 4 == 2 else 0), c[3] if waves == 1 else c[2])
+			if waves == 1:
+				_pattern(img, o + 1, 2 + 9, ["###.......", "#####....."], Color("#d8bc78"))
 
 
 static var _tile_cache: Image

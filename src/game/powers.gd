@@ -52,3 +52,14 @@ static func effect_kind(power: String) -> String:
 	if power.begins_with("spawn"):
 		return "spawn"
 	return "terrain"
+
+
+static func brush_color(power: String) -> Color:
+	match effect_kind(power):
+		"smite":
+			return Color(1.0, 0.45, 0.35, 0.95)
+		"bless":
+			return Color(1.0, 0.9, 0.45, 0.95)
+		"spawn":
+			return Color(0.55, 1.0, 0.6, 0.95)
+	return Color(1.0, 0.95, 0.75, 0.9)

@@ -34,7 +34,8 @@ void fragment() {
 	float shade = m.g * 255.0 / 128.0;
 	vec3 base;
 	if (id == 2) base = skins[int(v_custom.y + 0.5) % 4].rgb;
-	else if (id == 3 || id == 12 || id == 13 || id == 18) base = v_tint.rgb;
+	else if (id == 3 || id == 18) base = v_tint.rgb;
+	else if (id == 12 || id == 13) base = mix(v_tint.rgb, vec3(0.55, 0.42, 0.30), 0.55); // muted roofs keep people readable
 	else if (id == 4) base = hairs[int(v_custom.z + 0.5) % 5].rgb;
 	else if (id == 5) base = wools[int(v_custom.z + 0.5) % 3].rgb;
 	else base = mats[id].rgb;

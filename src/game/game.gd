@@ -52,6 +52,8 @@ var pending_teleport_id: int = -1
 func _ready() -> void:
 	Defs.ensure_loaded()
 	get_viewport().gui_embed_subwindows = true
+	# Outside the world reads as open sea rather than an engine-grey void.
+	RenderingServer.set_default_clear_color(Color("#0d1a3c"))
 	add_child(world_root)
 	world_root.add_child(terrain)
 	world_root.add_child(buildings_view)
@@ -184,6 +186,7 @@ func _process(delta: float) -> void:
 func set_power(id: String) -> void:
 	power = id
 	fx.brush_visible = Powers.DEFS[id]["brush"]
+	fx.brush_color = Powers.brush_color(id)
 	power_changed.emit()
 
 
@@ -226,6 +229,10 @@ func focus_city(cid: int) -> void:
 func focus_tile(i: int) -> void:
 	if i >= 0:
 		camera.jump_to(tile_center_px(i), maxf(camera.target_zoom, 2.5))
+
+
+func is_following() -> bool:
+	return camera.follow_callable.is_valid()
 
 
 func follow_selected() -> void:
@@ -355,8 +362,8 @@ func _on_key(k: InputEventKey) -> void:
 	match k.keycode:
 		KEY_SPACE:
 			toggle_pause()
-		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-			set_speed(k.keycode - KEY_1)
+		KEY_1, KEY_2, KEY_3, KEY_4:
+			set_speed(k.keycode - KEY_1 + 1)
 		KEY_BRACKETLEFT, KEY_MINUS:
 			set_brush_radius(brush_radius - 1)
 		KEY_BRACKETRIGHT, KEY_EQUAL:
@@ -371,8 +378,9 @@ func _on_key(k: InputEventKey) -> void:
 			else:
 				ui.toggle_menu()
 		KEY_F:
-			if k.shift_pressed and selected_unit >= 0:
-				follow_selected()
+			if k.shift_pressed:
+				if selected_unit >= 0:
+					follow_selected()
 			elif Powers.HOTKEYS.values().has(k.keycode):
 				set_power(Powers.HOTKEYS.find_key(k.keycode))
 		_:

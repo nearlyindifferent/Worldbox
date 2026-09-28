@@ -8,7 +8,7 @@ var _filter := OptionButton.new()
 var _timer := 0.0
 var _last_total := -1
 var _entries: Array[Dictionary] = []
-const FILTERS := ["All events", "Major only", "Settlements", "Leaders", "Hardship"]
+const FILTERS := ["Notable events", "Everything", "Major only", "Settlements", "Leaders", "Hardship"]
 
 
 func _ready() -> void:
@@ -59,13 +59,16 @@ func _process(delta: float) -> void:
 	var mode := _filter.selected
 	for e: Dictionary in game.sim.history.recent(400):
 		var k := int(e["kind"])
-		if mode == 1 and not (k in HistoryLog.MAJOR):
+		# "Notable" hides routine construction so important events stand out.
+		if mode == 0 and k == HistoryLog.Kind.BUILDING and not str(e["text"]).contains("destroyed"):
 			continue
-		if mode == 2 and not (k in [HistoryLog.Kind.CITY_FOUNDED, HistoryLog.Kind.CITY_ABANDONED, HistoryLog.Kind.BUILDING]):
+		if mode == 2 and not (k in HistoryLog.MAJOR):
 			continue
-		if mode == 3 and not (k in [HistoryLog.Kind.LEADER_CHANGED, HistoryLog.Kind.LEADER_DIED]):
+		if mode == 3 and not (k in [HistoryLog.Kind.CITY_FOUNDED, HistoryLog.Kind.CITY_ABANDONED, HistoryLog.Kind.BUILDING]):
 			continue
-		if mode == 4 and not (k in [HistoryLog.Kind.FAMINE, HistoryLog.Kind.DISASTER, HistoryLog.Kind.CITY_ABANDONED]):
+		if mode == 4 and not (k in [HistoryLog.Kind.LEADER_CHANGED, HistoryLog.Kind.LEADER_DIED]):
+			continue
+		if mode == 5 and not (k in [HistoryLog.Kind.FAMINE, HistoryLog.Kind.DISASTER, HistoryLog.Kind.CITY_ABANDONED]):
 			continue
 		var idx := _list.add_item("%s  %s" % [_short_date(int(e["tick"])), e["text"]])
 		if k in HistoryLog.MAJOR:

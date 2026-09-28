@@ -28,6 +28,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_LEFT_WIDE)
 	offset_left = 8
 	offset_right = 568
+	custom_minimum_size = Vector2(560, 0)
+	clip_contents = true
 	offset_top = 60
 	offset_bottom = -130
 	var col := VBoxContainer.new()
@@ -67,10 +69,13 @@ func _process(delta: float) -> void:
 		return
 	_timer = 0.0
 	var sim := game.sim
-	_world_info.text = "tick %d   %s\nunits %d   cities %d   buildings %d\ncommands logged %d   history %d major / %d minor\nbirths %d   deaths %s" % [
+	var causes := PackedStringArray()
+	for k: String in sim.deaths_by_cause:
+		causes.append("%s %d" % [k, int(sim.deaths_by_cause[k])])
+	_world_info.text = "tick %d   %s\nunits %d   cities %d   buildings %d\ncommands logged %d   history %d major / %d minor\nbirths %d   deaths %d (%s)" % [
 		sim.tick, sim.date_string(), sim.units.count, sim.cities.size(), sim.buildings.size(),
-		sim.command_log.size(), sim.history.major.size(), sim.history.minor.size(), sim.total_births, str(sim.deaths_by_cause)]
-	if _tabs.current_tab == 3:
+		sim.command_log.size(), sim.history.major.size(), sim.history.minor.size(), sim.total_births, sim.total_deaths, ", ".join(causes)]
+	if _tabs.get_current_tab_control() != null and _tabs.get_current_tab_control().name == "Debug":
 		_refresh_decisions()
 
 
@@ -131,7 +136,12 @@ func _run_search() -> void:
 	if mode == "Cities":
 		return
 	var u := sim.units
+	var slots: Array[int] = []
 	for s in u.capacity:
+		if u.alive[s] == 1:
+			slots.append(s)
+	slots.sort_custom(func(a: int, b: int) -> bool: return u.id[a] < u.id[b])
+	for s in slots:
 		if _results.item_count >= 300:
 			_results.add_item("... refine the search to see more")
 			_result_refs.append(["none", 0])
@@ -250,7 +260,9 @@ func _unit_editor(s: int) -> void:
 				game.toast.emit(str(r["msg"]), true)))
 	var s2 := sim.units.slot_for(uid)
 	var p: PackedInt32Array = u.path.get(s2, PackedInt32Array())
-	_sel_box.add_child(UiTheme.label("state %d task %s target %d timer %d path %d/%d next_think %d look %x" % [u.state[s], UnitStore.TASK_NAMES[u.task[s]], u.task_target[s], u.task_timer[s], u.path_pos[s], p.size(), u.next_think[s], u.look[s]], "MutedLabel"))
+	var dbg := UiTheme.label("state %d  task %s  target %d  timer %d\npath %d/%d  next_think %d  look %x" % [u.state[s], UnitStore.TASK_NAMES[u.task[s]], u.task_target[s], u.task_timer[s], u.path_pos[s], p.size(), u.next_think[s], u.look[s]], "MutedLabel")
+	dbg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sel_box.add_child(dbg)
 
 
 func _city_editor(c: City) -> void:
@@ -285,6 +297,8 @@ func _city_editor(c: City) -> void:
 
 func _build_world() -> void:
 	var v := _page("World")
+	_world_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_world_info.custom_minimum_size = Vector2(520, 0)
 	v.add_child(_world_info)
 	v.add_child(HSeparator.new())
 	v.add_child(UiTheme.label("Simulation speed (admin override, ticks = 10 x value per second)", "MutedLabel"))
@@ -321,7 +335,8 @@ func _rebuild_laws() -> void:
 		return
 	for law: String in WorldLaws.DEFAULTS:
 		var cb := CheckBox.new()
-		cb.text = "%s - %s" % [law.replace("_", " "), WorldLaws.DESCRIPTIONS[law]]
+		cb.text = law.replace("_", " ").capitalize()
+		cb.tooltip_text = WorldLaws.DESCRIPTIONS[law]
 		cb.button_pressed = game.sim.laws.is_on(law)
 		var l := law
 		cb.toggled.connect(func(on: bool) -> void: game.command({"op": "set_law", "law": l, "on": on}))
@@ -365,9 +380,11 @@ func _build_debug() -> void:
 	dr.add_child(UiTheme.label("AI decisions", "GoldLabel"))
 	for f in ["all", "settlement", "construction", "succession", "shortage"]:
 		_dec_filter.add_item(f)
+	_dec_filter.item_selected.connect(func(_i: int) -> void: _refresh_decisions())
 	dr.add_child(_dec_filter)
 	v.add_child(dr)
-	_decisions.custom_minimum_size = Vector2(0, 360)
+	_decisions.custom_minimum_size = Vector2(520, 360)
+	_decisions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_decisions.fit_content = false
 	_decisions.scroll_following = false
 	v.add_child(_decisions)
@@ -384,4 +401,4 @@ func _refresh_decisions() -> void:
 		lines.append("%s  %s" % [game.sim.date_string(int(e["tick"])), DecisionLog.format(e)])
 		if lines.size() >= 40:
 			break
-	_decisions.text = "\n".join(lines)
+	_decisions.text = "\n".join(lines) if lines.size() > 0 else "No decisions recorded yet for this filter."

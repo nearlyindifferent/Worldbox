@@ -1,7 +1,7 @@
 class_name CityLabels
 extends Control
 ## Screen-space name banners that track each city's town hall. Clicking a banner
-## selects the city. Banners fade when zoomed in close so they do not hide the town.
+## selects the city. Larger cities win when banners would overlap.
 
 var game: Game
 var _pool := {}  ## city id -> Button
@@ -18,22 +18,36 @@ func _process(_delta: float) -> void:
 	var sim := game.sim
 	var xf := get_viewport().get_canvas_transform()
 	var zoom := game.camera.current_zoom()
+	var vp := get_viewport_rect()
+	# Biggest cities claim screen space first; overlapping smaller banners are hidden.
+	var order: Array = sim.cities.values()
+	order.sort_custom(func(a: City, b: City) -> bool: return a.population() > b.population() or (a.population() == b.population() and a.id < b.id))
+	var placed: Array[Rect2] = []
 	var seen := {}
-	for c: City in sim.cities.values():
-		if not c.alive:
-			continue
+	for c: City in order:
 		seen[c.id] = true
 		var b: Button = _pool.get(c.id, null)
 		if b == null:
 			b = _make(c)
 			_pool[c.id] = b
 		b.text = "%s  %d" % [c.name, c.population()]
-		var world_pos := (Vector2(c.center % sim.world.width, c.center / sim.world.width) + Vector2(0.5, -1.2)) * AssetForge.TILE
+		# Anchor above the town hall roof (hall top-left is center - (1,1)).
+		var world_pos := (Vector2(c.center % sim.world.width, c.center / sim.world.width) + Vector2(0.0, -2.2)) * AssetForge.TILE
 		var sp := xf * world_pos
 		b.reset_size()
-		b.position = (sp - Vector2(b.size.x * 0.5, b.size.y)).round()
-		b.modulate.a = clampf(1.6 - zoom * 0.25, 0.35, 1.0)
-		b.visible = get_viewport_rect().grow(100).has_point(sp)
+		var r := Rect2((sp - Vector2(b.size.x * 0.5, b.size.y)).round(), b.size)
+		var show := vp.grow(-4).intersects(r)
+		if show and zoom < 0.55 and c.population() < 6 and placed.size() > 0:
+			show = false
+		if show:
+			for other in placed:
+				if other.grow(2).intersects(r):
+					show = false
+					break
+		b.visible = show
+		if show:
+			placed.append(r)
+			b.position = r.position
 	for id: int in _pool.keys():
 		if not seen.has(id):
 			(_pool[id] as Button).queue_free()
