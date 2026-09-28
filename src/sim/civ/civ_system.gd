@@ -12,10 +12,27 @@ const TERRITORY_BASE := 80
 const TERRITORY_PER_PERSON := 8
 const MAX_CLAIMS_PER_PLAN := 4
 const BIRTH_CHANCE := 0.35
-const FOOD_PER_PERSON_FOR_BIRTH := 1.5
+## Births need stores covering this many months of the city's food need, so growth
+## tracks food *production* rather than a fixed storage constant.
+const BIRTH_FOOD_MONTHS := 2.0
 const START_FOOD := 10.0
+## One granary per this many residents may be built (storage scales with the city).
+const PEOPLE_PER_GRANARY := 25
+## Colonisation: crowded cities send settler bands to found new towns.
+const SETTLER_MIN_POP := 28
+const SETTLER_BAND := 6
+const SETTLER_COOLDOWN_YEARS := 4.0
+const SETTLER_MIN_DISTANCE := 26
+const SETTLER_MAX_DISTANCE := 60
+## Most founders a new city accepts at once; the rest stay nomads and settle elsewhere.
+const MAX_FOUNDERS := 12
+## Monthly decay of goods stored above capacity (spoilage / overflow).
+const OVERFLOW_DECAY := 0.3
 
 var sim: Simulation
+var _blocked_logged: Dictionary = {}  ## building id -> true (log de-duplication only)
+var _last_settlers: Dictionary = {}   ## city id -> tick settlers last left (saved)
+var settler_attempts: Dictionary = {}  ## settler unit id -> founding attempts at the destination (saved)
 var _human: Defs.SpeciesDef
 var _meal_food: float
 
@@ -101,12 +118,12 @@ func _has_biome_near(x: int, y: int, r: int, biomes: Array) -> bool:
 	return false
 
 
-## Cityless adults of the same species near unit s (including s).
+## Cityless ADULTS of the same species near unit s (including s), nearest first.
 func _band_of(s: int) -> PackedInt32Array:
 	var u := sim.units
 	var out := PackedInt32Array()
 	for o in sim.spatial.query_radius(u, u.x[s], u.y[s], SimConst.CITY_JOIN_RADIUS, u.species[s]):
-		if u.city[o] == SimConst.CITY_NONE:
+		if u.city[o] == SimConst.CITY_NONE and u.age_years(o, sim.tick) >= _human.adult_age:
 			out.append(o)
 	return out
 
@@ -166,9 +183,14 @@ func found_city(s: int, ti: int, reasons: Array) -> City:
 	var hall := _place_building(c, Defs.building_by_id("town_hall").index, x, y, true)
 	c.center = hall.center_tile(w.width)
 	_claim_disk(c, c.center % w.width, c.center / w.width, SimConst.CITY_START_RADIUS)
-	for o in _band_of(s):
-		join_city(o, c)
 	join_city(s, c)
+	var joined := 1
+	for o in _band_of(s):
+		if joined >= MAX_FOUNDERS:
+			break
+		if u.city[o] == SimConst.CITY_NONE:
+			join_city(o, c)
+			joined += 1
 	_recompute_capacity(c)
 	sim.history.record(sim.tick, HistoryLog.Kind.CITY_FOUNDED, "%s was founded by %s." % [c.name, u.name[s]], {"city": c.id, "unit": u.id[s]}, c.center)
 	sim.decisions.record(sim.tick, "settlement", u.name[s], "founded %s" % c.name, reasons, {"city": c.id})
@@ -198,6 +220,8 @@ func join_city(s: int, c: City) -> void:
 		(sim.cities[u.city[s]] as City).remove_member(u.id[s])
 	u.city[s] = c.id
 	c.members.append(u.id[s])
+	u.set_flag(s, UnitStore.Flag.SETTLER, false)
+	settler_attempts.erase(u.id[s])
 	# Dependent cityless children follow their parent into the city.
 	for cid in u.children.get(u.id[s], PackedInt64Array()):
 		var cs := u.slot_for(cid)
@@ -243,15 +267,18 @@ func _ensure_leader(c: City) -> void:
 	var u := sim.units
 	if u.is_alive_id(c.leader_id):
 		return
+	# Eldest member leads; if only children remain, the eldest child rules (regency).
 	var best := -1
 	for mid in c.members:
 		var s := u.slot_for(mid)
-		if s >= 0 and u.age_years(s, sim.tick) >= _human.adult_age and (best < 0 or u.birth_tick[s] < u.birth_tick[best]):
+		if s >= 0 and (best < 0 or u.birth_tick[s] < u.birth_tick[best]):
 			best = s
 	if best >= 0:
 		c.leader_id = u.id[best]
-		sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became leader of %s." % [u.name[best], c.name], {"city": c.id, "unit": u.id[best]}, c.center)
-		sim.decisions.record(sim.tick, "succession", c.name, "chose %s as leader" % u.name[best], [["rule", "eldest adult member"], ["age", u.age_years(best, sim.tick)]], {"city": c.id})
+		var adult := u.age_years(best, sim.tick) >= _human.adult_age
+		sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became %s of %s." % [u.name[best], "leader" if adult else "child ruler", c.name], {"city": c.id, "unit": u.id[best]}, c.center)
+		sim.decisions.record(sim.tick, "succession", c.name, "chose %s as leader" % u.name[best],
+			[["rule", "eldest member" if adult else "no adults left: eldest child"], ["age", u.age_years(best, sim.tick)]], {"city": c.id})
 
 
 ## Target worker counts in priority order. Pure function of city state.
@@ -424,8 +451,27 @@ func _plan_construction(c: City) -> void:
 	var granary := Defs.building_by_id("granary")
 	if not house_pending and c.housing - c.population() < 3:
 		_start_project(c, Defs.building_by_id("house").index)
-	if not civic_pending and c.population() >= int(granary.raw.get("min_population", 14)) and not _has_building(c, granary.index):
+	_log_blocked_sites(c)
+	var granaries := _count_buildings(c, granary.index)
+	@warning_ignore("integer_division")
+	var granaries_allowed := c.population() / PEOPLE_PER_GRANARY + (1 if c.population() >= int(granary.raw.get("min_population", 14)) else 0)
+	if not civic_pending and granaries < granaries_allowed:
 		_start_project(c, granary.index)
+
+
+## Records (once per site) that construction is waiting on missing materials.
+func _log_blocked_sites(c: City) -> void:
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if b.complete or b.paid or _affordable(c, b) or _blocked_logged.has(bid):
+			continue
+		_blocked_logged[bid] = true
+		var missing: Array = []
+		for res: String in b.def().cost:
+			var short := float(b.def().cost[res]) - float(c.storage.get(res, 0.0))
+			if short > 0.0:
+				missing.append(["missing " + res, short])
+		sim.decisions.record(sim.tick, "construction", c.name, "cannot start %s yet" % b.def().name, missing, {"city": c.id, "building": bid})
 
 
 func _start_project(c: City, type: int) -> void:
@@ -438,11 +484,12 @@ func _start_project(c: City, type: int) -> void:
 		[["population", c.population()], ["housing", c.housing], ["wood in store", float(c.storage["wood"])]], {"city": c.id, "building": b.id})
 
 
-func _has_building(c: City, type: int) -> bool:
+func _count_buildings(c: City, type: int) -> int:
+	var n := 0
 	for bid in c.buildings:
 		if (sim.buildings[bid] as Building).type == type:
-			return true
-	return false
+			n += 1
+	return n
 
 
 func _find_site(c: City, size: int) -> int:
@@ -515,12 +562,22 @@ func _place_building(c: City, type: int, x: int, y: int, complete: bool) -> Buil
 	return b
 
 
+## Site a builder should work on: paid sites first, then affordable ones, housing
+## before civic. Unaffordable sites are skipped so they cannot block the others.
 func pick_construction(c: City) -> Building:
+	var best: Building = null
+	var best_rank := 99
 	for bid in c.buildings:
 		var b: Building = sim.buildings[bid]
-		if not b.complete:
-			return b
-	return null
+		if b.complete:
+			continue
+		var rank := 0 if b.paid else (2 if _affordable(c, b) else 99)
+		if b.def().housing > 0:
+			rank -= 1
+		if rank < best_rank:
+			best_rank = rank
+			best = b
+	return best if best_rank < 90 else null
 
 
 func _affordable(c: City, b: Building) -> bool:
@@ -615,8 +672,7 @@ func nearest_storage_tile(c: City, from_tile: int) -> int:
 func deposit(c: City, res: String, amount: float) -> void:
 	if res == "":
 		return
-	var cap := c.food_capacity if res == "food" else float(Defs.building_globals.get("base_%s_capacity" % res, 200))
-	var room := maxf(0.0, cap - float(c.storage.get(res, 0.0)))
+	var room := maxf(0.0, capacity_of(c, res) - float(c.storage.get(res, 0.0)))
 	c.add_resource(res, minf(room, amount))
 
 
@@ -680,11 +736,13 @@ func _monthly(c: City) -> void:
 				[["food in store", float(c.storage["food"])], ["population", pop], ["food produced last month", float(c.produced["food"])]], {"city": c.id})
 	else:
 		c.starving_months = 0
+	_spoil_overflow(c)
 	c.roll_month()
+	_maybe_send_settlers(c)
 	if not sim.laws.is_on("reproduction"):
 		return
 	var room := c.housing - pop
-	if room <= 0 or float(c.storage["food"]) < pop * FOOD_PER_PERSON_FOR_BIRTH:
+	if room <= 0 or not births_food_ok(c):
 		return
 	var fathers: Array[int] = []
 	var mothers: Array[int] = []
@@ -719,6 +777,97 @@ func _monthly(c: City) -> void:
 		sim.month_births += 1
 		sim.total_births += 1
 		room -= 1
+
+
+func monthly_food_need(c: City) -> float:
+	return c.population() * _human.hunger_rate * SimConst.TICKS_PER_MONTH / float(_human.raw["meal_hunger"]) * _meal_food
+
+
+## Births require a food stock covering BIRTH_FOOD_MONTHS of need.
+func births_food_ok(c: City) -> bool:
+	return float(c.storage["food"]) >= monthly_food_need(c) * BIRTH_FOOD_MONTHS
+
+
+func capacity_of(c: City, res: String) -> float:
+	return c.food_capacity if res == "food" else float(Defs.building_globals.get("base_%s_capacity" % res, 200))
+
+
+## Goods above capacity (god gifts, a lost granary) decay each month.
+func _spoil_overflow(c: City) -> void:
+	for res in City.RESOURCES:
+		var cap := capacity_of(c, res)
+		var have: float = c.storage[res]
+		if have > cap:
+			c.storage[res] = cap + (have - cap) * (1.0 - OVERFLOW_DECAY)
+
+
+## Crowded cities send a band of adults (with their young children) to found a new
+## town elsewhere. This is the engine of expansion after the first generation.
+func _maybe_send_settlers(c: City) -> void:
+	if not sim.laws.is_on("settlement_founding") or c.population() < SETTLER_MIN_POP:
+		return
+	if sim.tick - int(_last_settlers.get(c.id, -1000000)) < int(SETTLER_COOLDOWN_YEARS * SimConst.TICKS_PER_YEAR):
+		return
+	var crowding := float(c.population()) / maxf(1.0, c.housing)
+	var pressure := crowding + (0.3 if not births_food_ok(c) else 0.0)
+	if pressure < 0.9 or not sim.rng.chance(0.25):
+		return
+	var w := sim.world
+	var target := -1
+	var best := -INF
+	var cx := c.center % w.width
+	var cy := c.center / w.width
+	for k in 10:
+		var ang := sim.rng.randf() * TAU
+		var dist := sim.rng.randf_range(SETTLER_MIN_DISTANCE, SETTLER_MAX_DISTANCE)
+		var tx := clampi(cx + int(cos(ang) * dist), 0, w.width - 1)
+		var ty := clampi(cy + int(sin(ang) * dist), 0, w.height - 1)
+		var i := w.idx(tx, ty)
+		if not w.is_walkable(i) or sim.pathfinder.component_of(i) != sim.pathfinder.component_of(c.center):
+			continue
+		var score := float(evaluate_site(i)["score"])
+		if score > best:
+			best = score
+			target = i
+	if target < 0 or best < SimConst.FOUND_MIN_SITE_SCORE * 0.8:
+		return
+	var u := sim.units
+	var leaving := PackedInt32Array()
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s < 0 or mid == c.leader_id:
+			continue
+		var age := u.age_years(s, sim.tick)
+		if age >= _human.adult_age and age < 40.0:
+			leaving.append(s)
+			if leaving.size() >= SETTLER_BAND:
+				break
+	if leaving.size() < 2:
+		return
+	_last_settlers[c.id] = sim.tick
+	var names := PackedStringArray()
+	for s in leaving:
+		c.remove_member(u.id[s])
+		u.city[s] = SimConst.CITY_NONE
+		u.job[s] = 0
+		u.carry_amount[s] = 0.0
+		u.carry_type[s] = 0
+		u.task[s] = UnitStore.Task.FOUND_CITY
+		u.task_target[s] = target
+		u.set_flag(s, UnitStore.Flag.SETTLER, true)
+		settler_attempts[u.id[s]] = 0
+		u.next_think[s] = sim.tick
+		sim.movement.stop(s)
+		names.append(u.name[s])
+		for cid in u.children.get(u.id[s], PackedInt64Array()):
+			var cs := u.slot_for(cid)
+			if cs >= 0 and u.city[cs] == c.id and u.age_years(cs, sim.tick) < _human.adult_age:
+				c.remove_member(cid)
+				u.city[cs] = SimConst.CITY_NONE
+				u.job[cs] = 0
+	sim.history.record(sim.tick, HistoryLog.Kind.MIGRATION, "Settlers led by %s left %s to seek new land." % [names[0], c.name], {"city": c.id, "unit": u.id[leaving[0]]}, target)
+	sim.decisions.record(sim.tick, "settlement", c.name, "sent %d settlers" % leaving.size(),
+		[["crowding (people / housing)", crowding], ["food for births", "short" if not births_food_ok(c) else "ok"], ["target site score", best]], {"city": c.id})
 
 
 func abandon_city(c: City, reason: String) -> void:
@@ -770,8 +919,10 @@ func on_tile_changed(i: int) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {}
+	return {"last_settlers": _last_settlers.duplicate(), "settler_attempts": settler_attempts.duplicate(), "blocked_logged": _blocked_logged.duplicate()}
 
 
-func from_dict(_d: Dictionary) -> void:
-	pass
+func from_dict(d: Dictionary) -> void:
+	_last_settlers = d.get("last_settlers", {})
+	settler_attempts = d.get("settler_attempts", {})
+	_blocked_logged = d.get("blocked_logged", {})

@@ -20,5 +20,12 @@
 | D-016 | 2026-09-28 | Frame sim budget 14 ms: excess ticks are deferred, never skipped | Frame-rate independence of outcomes | At very high speed on slow machines the world runs slower than requested (indicator shown) |
 | D-017 | 2026-09-28 | Custom headless test runner instead of a third-party framework | No network dependency, tiny, fits the Gauntlet evidence model | Fewer conveniences (no mocking) |
 
+| D-018 | 2026-09-28 | Births gated by months-of-need food stock; granaries scale with population | Old rule produced a hidden ≈93 population cap (Gauntlet D-1) | Growth now limited by production and housing |
+| D-019 | 2026-09-28 | Colonisation via settler bands from crowded cities | Without it no city was founded after year 3 (Gauntlet D-4) | Expansion continues across generations; new history kind MIGRATION |
+| D-020 | 2026-09-28 | Woolback density pressure (local crowding × forage) instead of a per-chunk hard cap | Herd cohesion vs chunk cap blocked 81 % of breeding → extinction (Gauntlet D-3) | Herds now respond to grass availability |
+| D-021 | 2026-09-28 | Landmass component labels saved with the world, rebuilt at most every 30 ticks | Unreachable A* explored whole islands (21 ms each, Gauntlet D-9); saving labels keeps reloads deterministic | Up to 30 ticks of stale reachability after terrain edits (safe: fallback is A*) |
+| D-022 | 2026-09-28 | `Simulation.clone()` goes through var_to_bytes | `to_dict()` shares packed arrays; `from_dict(to_dict())` aliased the two worlds (found while writing a regression test) | Never use `from_dict(to_dict())` for copies |
+| D-023 | 2026-09-28 | Rare biomes placed as landmarks (ashlands near peaks, glimmerwood inside forests); soil band in moist lowlands; noise feature count grows with √size | They appeared in 0/72 maps and large maps were scaled copies (Gauntlet D-10) | Worldgen output changed (seeds produce different maps than before) |
+
 ## Deviations from the brief's build order
 - Phase 0 slice already includes pieces from later phases because they were cheap and required by the slice (world laws infra from Phase 9, admin panel from Phase 10, decision logs/observability, bounded stats). They are foundations, not complete features; see FEATURE_MATRIX statuses.

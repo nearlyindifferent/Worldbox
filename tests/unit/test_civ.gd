@@ -90,7 +90,7 @@ func test_starvation_after_sustained_shortage() -> void:
 			sim.kill_unit(u, "test")
 	c.storage["food"] = 0.0
 	run_ticks(sim, SimConst.TICKS_PER_YEAR * 2)
-	var starved := int(sim.deaths_by_cause.get("starvation", 0))
+	var starved := sim.count_deaths("starvation")
 	note("pop before %d, starved %d" % [pop0, starved])
 	assert_true(starved > 0, "people starve after sustained shortage")
 	var famine := false

@@ -5,6 +5,10 @@ extends RefCounted
 ## Returns {"ok": bool, "msg": String, ...}.
 
 
+## Upper bound for brush radius regardless of caller (keeps undo entries and tick cost bounded).
+const MAX_BRUSH_RADIUS := 16
+
+
 static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 	var op: String = cmd.get("op", "")
 	match op:
@@ -131,7 +135,7 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 	var power: String = cmd["power"]
 	var x := int(cmd["x"])
 	var y := int(cmd["y"])
-	var r := int(cmd.get("radius", 1))
+	var r := clampi(int(cmd.get("radius", 1)), 0, MAX_BRUSH_RADIUS)
 	if sim.editor.is_terrain_power(power):
 		return _ok("", {"changed": sim.editor.apply_brush(power, x, y, r)})
 	match power:

@@ -7,7 +7,7 @@ extends RefCounted
 
 enum State { IDLE, MOVING, WORKING, EATING, FLEEING, DEAD }
 enum Task { NONE, WANDER, FORAGE, GRAZE, FARM, CHOP, QUARRY, BUILD, DELIVER, EAT_STORE, HUNT, GO_HOME, FOUND_CITY, SEEK_LAND, FOLLOW }
-enum Flag { FROZEN = 1, INVULNERABLE = 2, FAVORITE = 4 }
+enum Flag { FROZEN = 1, INVULNERABLE = 2, FAVORITE = 4, SETTLER = 8 }
 const TASK_NAMES := ["None", "Wandering", "Foraging", "Grazing", "Farming", "Chopping wood", "Quarrying stone", "Building", "Delivering goods", "Eating from stores", "Hunting", "Going home", "Founding a settlement", "Seeking dry land", "Following"]
 const SEX_MALE := 0
 const SEX_FEMALE := 1

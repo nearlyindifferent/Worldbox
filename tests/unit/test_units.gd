@@ -32,7 +32,7 @@ func test_hunger_starvation_and_law() -> void:
 	sim.units.hunger[s] = SimConst.HUNGER_MAX
 	run_ticks(sim, 400)
 	assert_false(sim.units.is_alive_id(uid), "starved without food")
-	assert_true(int(sim.deaths_by_cause.get("starvation", 0)) >= 1, "starvation cause recorded")
+	assert_true(sim.count_deaths("starvation") >= 1, "starvation cause recorded")
 	var s2 := sim.spawn_unit(sim.sheep_species, 20.5, 20.5, 2.0)
 	var uid2 := sim.units.id[s2]
 	sim.units.set_flag(s2, UnitStore.Flag.FROZEN, true)

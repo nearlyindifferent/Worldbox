@@ -71,6 +71,9 @@ func update() -> void:
 					changed = changed or (nv >> 6) != (v >> 6)
 				if b == forest and w.wood[i] < forest_wood:
 					w.wood[i] = mini(forest_wood, w.wood[i] + 9)
+				elif spread and b == forest and sim.rng.chance(SimConst.FOREST_DIEBACK_CHANCE):
+					w.set_biome(i, grass)
+					sim.pathfinder.refresh_tile_cost(i)
 				elif spread and b == grass and w.owner[i] == SimConst.CITY_NONE and sim.rng.chance(SimConst.FOREST_SPREAD_CHANCE):
 					if _neighbor_is(i, x, y, forest):
 						w.set_biome(i, forest)

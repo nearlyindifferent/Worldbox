@@ -44,6 +44,8 @@ const FOUND_EVAL_INTERVAL := 90
 const VEG_GROWTH := 24.0
 ## Probability (per visit) that a treeless fertile tile next to forest turns to forest.
 const FOREST_SPREAD_CHANCE := 0.012
+## Per-visit chance an old forest tile thins back to grassland (natural turnover).
+const FOREST_DIEBACK_CHANCE := 0.002
 ## Crop growth per VEG_CYCLE visit on farmland (0..255 maturity).
 const CROP_GROWTH := 90.0
 const CROP_MATURE := 240

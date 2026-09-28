@@ -15,7 +15,7 @@ All numbers live in `src/core/sim_const.gd` or `data/*.json`; this document expl
 - Each tile is visited every 60 ticks (staggered by chunk).
 - Grass-like biomes regrow `24 × fertility + 1` per visit up to the biome's `veg_max`.
 - Farmland: crop maturity grows `90 × (0.4 + 0.6 × moisture)` per visit (≈4–7 visits ≈ 0.7–1.2 years to mature). Mature ≥ 240.
-- Forest timber regrows +9 per visit. Unowned grassland touching forest converts to young forest with 1.2 % chance per visit (law `forest_spread`).
+- Forest timber regrows +9 per visit. Unowned grassland touching forest converts to young forest with 1.2 % chance per visit; mature forest thins back to grassland with 0.2 % chance per visit (turnover; both under law `forest_spread`).
 - Visual grazing: grass with low vegetation renders drier.
 
 ## Creatures (`LifeSystem`)
@@ -29,8 +29,8 @@ All numbers live in `src/core/sim_const.gd` or `data/*.json`; this document expl
 - Think every 8 ticks. Flee from hunting humans within 4 tiles.
 - Hunger ≥ 35: graze current tile if vegetation ≥ 24, otherwise sample 10 tiles within radius 7 for grazing; else wander farther.
 - Wander around the local herd centroid (10-tile radius) — herd cohesion.
-- Monthly breeding: female, fertile age, hunger ≤ 60, cooldown 0.8 y, 12 % chance, adult male within 6 tiles, fewer than 7 of the species in her chunk. Litter 1–2.
-- Result (measured): stable oscillating herds (≈50–150 on a medium island) under human hunting.
+- Wander around the local herd centroid with 40 % cohesion (loose herds spread over pasture).
+- Monthly breeding: female, fertile age, hunger ≤ 60, cooldown 0.8 y, base 24 % chance, an adult male within 6 tiles, then **density pressure**: probability × (local grass share around her) × (1 − woolbacks within 5 tiles / 12); none if ≥ 12 nearby. Litter 1–2. (Replaced a per-chunk hard cap that blocked 81 % of breeding — Gauntlet D-3.)
 
 ## Humans (`HumanAI`) — hierarchical decisions
 Decisions happen only when idle and the unit's think tick arrives (every 8 ticks, staggered), or immediately after a task completes.
@@ -53,29 +53,35 @@ Decisions happen only when idle and the unit's think tick arrives (every 8 ticks
 
 ## Settlements (`CivSystem`)
 ### Founding
-Site score around the candidate (radius 5): Σ fertility of unowned walkable tiles + 8 water access + 6 timber within 9 + 3 stone within 12 − 1 per already-owned tile. Rejected if the town-hall footprint is blocked or another city is within 22 tiles. Requires score ≥ 48 **and** a band of ≥ 2 cityless adults within 12 tiles. All factors are stored as `founding_reasons` and in the DecisionLog.
+Site score around the candidate (radius 5): Σ fertility of unowned walkable tiles + 8 water access + 6 timber within 9 + 3 stone within 12 − 1 per already-owned tile. Rejected if the town-hall footprint is blocked or another city is within 22 tiles. Requires score ≥ 48 **and** a band of ≥ 2 cityless **adults** within 12 tiles. All factors are stored as `founding_reasons` and in the DecisionLog.
 
-On founding: 2×2 town hall (housing 4, storage), territory disk radius 5, band members (and their children) join, 10 starting food, founder is leader.
+On founding: 2×2 town hall (housing 4, storage), territory disk radius 5, founder + up to 11 nearest band adults (and their children) join (`MAX_FOUNDERS` 12; the rest stay nomads), 10 starting food, founder is leader.
+
+### Colonisation (settlers)
+Monthly, a city with ≥ 28 people whose crowding (people ÷ housing, +0.3 if food is too short for births) is ≥ 0.9 has a 25 % chance — at most once per 4 years — to send up to 6 adults aged 14–40 (not the leader) plus their young children. The destination is the best of 10 sites 26–60 tiles away on the same landmass (score ≥ 80 % of the founding threshold). Settlers carry the SETTLER flag: they never re-join cities, walk to the site, found there if the rules allow, otherwise scout up to 4 times, then become ordinary nomads. Recorded as a MIGRATION history event and a settlement decision with its reasons.
 
 ### Planning (every 30 ticks, staggered)
 1. Abandon if population is 0.
 2. Recompute housing and food capacity (60 + 80 per granary).
-3. Succession: if the leader is dead, the eldest adult member leads (logged).
+3. Succession: if the leader is dead, the eldest member leads — an adult if any, otherwise the eldest child ("child ruler"); logged with the rule used.
 4. Job targets (pure function `compute_job_targets`): food workers = 45 %/30 %/15 % of adults when stores last < 1 / < 4 / ≥ 4 months (60 % farmers, rest gatherers); woodcutters 25 % when wood < unpaid needs + 12; builders 2 per affordable site (≤ 25 %); quarriers when stone is short; 1 hunter at ≥ 6 adults. Leftover adults cut wood while wood < 60, else gather. Existing jobs are kept when still needed (stability).
 5. Fields: 4 per farmer target; ≤ 2 new per plan on fertile grass/soil, clustered, not next to buildings.
-6. Construction: at most one housing project and one civic project concurrently. House when free housing < 3. Granary when population ≥ 14 and none exists. Site = nearest valid 2×2 footprint in territory with a one-tile gap from other buildings.
+6. Construction: at most one housing project and one civic project concurrently. House when free housing < 3. Granaries allowed: 1 from population 14, +1 per 25 people. Site = nearest valid 2×2 footprint in territory with a one-tile gap from other buildings. Builders pick paid sites first, then affordable ones, housing before civic; unaffordable sites are skipped (logged once as "cannot start … missing X").
 7. Territory: target 80 + 8 × population tiles; claim up to 4 best border tiles per plan (fertility-weighted, closer first).
 
 ### Monthly
 - Famine: food < 1 for 3 consecutive months → FAMINE history + shortage decision.
-- Births: needs free housing and food ≥ 1.5 × population; each fertile mother (16–45, cooldown 1.5 y, hunger < 75) has 35 % chance with a random fertile father from the city.
-- Storage beyond capacity is discarded (spoilage).
+- Births: need free housing and a food stock covering **2 months of the city's need** (need = population × hunger rate × 30 / meal hunger × meal food); each fertile mother (16–45, cooldown 1.5 y, hunger < 75) has 35 % chance with a random fertile father from the city. (Replaced "food ≥ 1.5 × population", which capped every city at ≈ 93 because storage is bounded — Gauntlet D-1.)
+- Deliveries beyond capacity are discarded; stock already above capacity (god gifts, a destroyed granary) decays 30 % of the excess per month.
 
 ### Abandonment
 Town hall destroyed with no other storage, or population 0 → members become nomads, territory released, farmland reverts to soil, buildings removed, history + decision entries.
 
+## Pathfinding reachability
+Walkable tiles are labelled into 4-connected landmass components (`Pathfinder.rebuild_components`). Requests between different components return "unreachable" immediately without spending A* budget. Labels rebuild at most every 30 ticks while dirty and are saved, so reloaded worlds decide identically.
+
 ## God powers
-Terrain brushes record undo per stroke. Changing a tile's walkability updates A*; making a building's tile unwalkable destroys it; destroying the last storage abandons the city. Spawn powers need land within 4 tiles. Smite kills non-invulnerable units in the brush; Blessing heals and feeds.
+Brush radius is clamped to 16 by the simulation. Terrain brushes record undo per stroke. Changing a tile's walkability updates A*; making a building's tile unwalkable destroys it; destroying the last storage abandons the city. Spawn powers need land within 4 tiles. Smite kills non-invulnerable units in the brush; Blessing heals and feeds.
 
 ## Laws
 `hunger`, `natural_death`, `reproduction`, `animal_reproduction`, `vegetation_growth`, `forest_spread`, `settlement_founding`, `construction` — read every tick; toggles take effect immediately.
@@ -84,4 +90,5 @@ Terrain brushes record undo per stroke. Changing a tile's walkability updates A*
 - `HistoryLog`: major events kept; minor events capped at 4000.
 - `DecisionLog`: 600 most recent decisions with numeric reasons (settlement, construction, succession, shortage).
 - `StatSeries`: bounded (≤ 512 samples) with pairwise downsampling.
-- `Simulation.deceased`: genealogy records for dead humans, capped at 20 000 (oldest evicted).
+- `Simulation.deceased`: genealogy records for dead humans, capped at 20 000 (oldest evicted; their child links are pruned too). Genealogy links are kept for sapient species only.
+- `deaths_by_cause` keys are `"<species>: <cause>"`; use `Simulation.count_deaths(cause, species)`.

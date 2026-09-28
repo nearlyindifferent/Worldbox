@@ -10,6 +10,8 @@ const WANDER_RADIUS := 6
 const FLEE_RADIUS := 4.0
 const MATE_RADIUS := 6.0
 const HERD_RADIUS := 10.0
+const CROWD_RADIUS := 5.0
+const HERD_COHESION := 0.4
 
 var sim: Simulation
 
@@ -88,8 +90,8 @@ func _wander(s: int, radius: int) -> void:
 		for o in herd:
 			sx += u.x[o]
 			sy += u.y[o]
-		cx = lerpf(cx, sx / herd.size(), 0.7)
-		cy = lerpf(cy, sy / herd.size(), 0.7)
+		cx = lerpf(cx, sx / herd.size(), HERD_COHESION)
+		cy = lerpf(cy, sy / herd.size(), HERD_COHESION)
 	var tx := clampi(int(cx) + sim.rng.randi_range(-radius, radius), 0, w.width - 1)
 	var ty := clampi(int(cy) + sim.rng.randi_range(-radius, radius), 0, w.height - 1)
 	var ti := w.idx(tx, ty)
@@ -139,16 +141,20 @@ func monthly_reproduction() -> void:
 			continue
 		if sim.tick - u.last_birth_tick[s] < int(def.birth_cooldown_years * SimConst.TICKS_PER_YEAR):
 			continue
-		if not sim.rng.chance(float(def.raw.get("birth_chance_per_month", 0.1))):
+		if not sim.rng.chance(float(def.raw.get("birth_chance_per_month", 0.1)) * 2.0):
 			continue
-		if sim.spatial.count_in_chunk_of(u.x[s], u.y[s], u, u.species[s]) >= int(def.raw.get("local_density_cap", 12)):
+		# Density pressure: crowding within CROWD_RADIUS and local grass both scale fertility,
+		# so herds grow where forage is plentiful and level off where it is grazed down.
+		var near := sim.spatial.query_radius(u, u.x[s], u.y[s], CROWD_RADIUS, u.species[s])
+		var cap := float(def.raw.get("local_density_cap", 12))
+		if near.size() >= cap:
 			continue
 		var has_mate := false
-		for o in sim.spatial.query_radius(u, u.x[s], u.y[s], MATE_RADIUS, u.species[s], 8):
-			if u.sex[o] == UnitStore.SEX_MALE and u.age_years(o, sim.tick) >= def.adult_age:
+		for o in near:
+			if u.sex[o] == UnitStore.SEX_MALE and u.age_years(o, sim.tick) >= def.adult_age and Vector2(u.x[o] - u.x[s], u.y[o] - u.y[s]).length() <= MATE_RADIUS:
 				has_mate = true
 				break
-		if has_mate:
+		if has_mate and sim.rng.chance(_forage_factor(u.x[s], u.y[s]) * (1.0 - near.size() / cap)):
 			births.append(Vector3i(u.species[s], s, sim.rng.randi_range(def.litter_min, def.litter_max)))
 	for b in births:
 		var m := b.y
@@ -160,3 +166,17 @@ func monthly_reproduction() -> void:
 			if c >= 0:
 				sim.month_births += 1
 				sim.total_births += 1
+
+
+## 0..1 share of grazing biomass on a few tiles around (x, y).
+func _forage_factor(x: float, y: float) -> float:
+	var w := sim.world
+	var total := 0.0
+	var n := 0
+	for d: Vector2i in [Vector2i(0, 0), Vector2i(3, 0), Vector2i(-3, 0), Vector2i(0, 3), Vector2i(0, -3)]:
+		var tx := int(x) + d.x
+		var ty := int(y) + d.y
+		if w.in_bounds(tx, ty):
+			total += w.vegetation[w.idx(tx, ty)] / 255.0
+			n += 1
+	return total / maxf(1.0, n)

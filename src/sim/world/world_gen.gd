@@ -18,28 +18,31 @@ static func generate(seed_value: int, w: int, h: int, shape: String = "island") 
 	var g := WorldGrid.new(w, h)
 	var rng := SimRng.new(seed_value ^ 0x5eed)
 
+	# Larger maps get more (not just bigger) features: frequency falls with sqrt(size).
+	var span := float(maxi(w, h))
+	var feat := 256.0 * sqrt(span / 256.0)
 	var elev_noise := FastNoiseLite.new()
 	elev_noise.seed = seed_value
 	elev_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	elev_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	elev_noise.fractal_octaves = 5
-	elev_noise.frequency = 3.2 / float(maxi(w, h))
+	elev_noise.frequency = 3.2 / feat
 
 	var ridge_noise := FastNoiseLite.new()
 	ridge_noise.seed = seed_value + 101
 	ridge_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	ridge_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	ridge_noise.fractal_octaves = 3
-	ridge_noise.frequency = 2.4 / float(maxi(w, h))
+	ridge_noise.frequency = 2.4 / feat
 
 	var moist_noise := FastNoiseLite.new()
 	moist_noise.seed = seed_value + 202
 	moist_noise.fractal_octaves = 4
-	moist_noise.frequency = 4.0 / float(maxi(w, h))
+	moist_noise.frequency = 4.0 / feat
 
 	var temp_noise := FastNoiseLite.new()
 	temp_noise.seed = seed_value + 303
-	temp_noise.frequency = 2.0 / float(maxi(w, h))
+	temp_noise.frequency = 2.0 / feat
 
 	var centers := _shape_centers(shape, rng)
 
@@ -65,7 +68,51 @@ static func generate(seed_value: int, w: int, h: int, shape: String = "island") 
 		var def: Defs.BiomeDef = Defs.biomes[b]
 		g.wood[i] = def.wood
 		g.vegetation[i] = int(def.veg_max * clampf(0.4 + 0.6 * g.moisture[i], 0.0, 1.0))
+	_place_special_biomes(g, rng)
+	for i in g.size:
+		var def2: Defs.BiomeDef = Defs.biomes[g.biome[i]]
+		g.wood[i] = def2.wood
+		g.vegetation[i] = mini(g.vegetation[i], def2.veg_max) if def2.veg_max > 0 else 0
 	return g
+
+
+## Rare landmarks: ashlands around some high peaks and luminous groves in forests.
+static func _place_special_biomes(g: WorldGrid, rng: SimRng) -> void:
+	var ash := Defs.biome_index("volcanic")
+	var mystic := Defs.biome_index("mystic")
+	var count := maxi(1, g.size / 40000)
+	for k in count:
+		# Ashlands: pick the highest of several mountain samples.
+		var best := -1
+		for tries in 200:
+			var i := rng.randi_range(0, g.size - 1)
+			if g.biome[i] == Defs.mountain_index and (best < 0 or g.elevation[i] > g.elevation[best]):
+				best = i
+		if best >= 0 and rng.chance(0.7):
+			_blob(g, best, rng.randi_range(4, 8), ash, rng, true)
+		# Glimmerwood: inside an existing forest.
+		for tries in 200:
+			var j := rng.randi_range(0, g.size - 1)
+			if g.biome[j] == Defs.forest_index:
+				if rng.chance(0.6):
+					_blob(g, j, rng.randi_range(3, 6), mystic, rng, false)
+				break
+
+
+static func _blob(g: WorldGrid, center: int, r: int, b: int, rng: SimRng, over_mountain: bool) -> void:
+	var cx := center % g.width
+	var cy := center / g.width
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var d := sqrt(float(dx * dx + dy * dy)) + rng.randf() * 1.5
+			if d > r or not g.in_bounds(cx + dx, cy + dy):
+				continue
+			var i := g.idx(cx + dx, cy + dy)
+			if g.is_water(i) or (g.biome[i] == Defs.mountain_index and not over_mountain) or g.biome[i] == Defs.biome_index("snow"):
+				continue
+			if g.biome[i] == Defs.mountain_index and d < r * 0.4:
+				continue
+			g.biome[i] = b
 
 
 static func _shape_centers(shape: String, rng: SimRng) -> Array[Vector3]:
@@ -115,4 +162,6 @@ static func classify(e: float, m: float, t: float) -> int:
 		return Defs.biome_index("swamp")
 	if m > 0.56:
 		return Defs.biome_index("forest")
+	if m > 0.50 and e < 0.47:
+		return Defs.biome_index("soil")
 	return Defs.biome_index("grassland")

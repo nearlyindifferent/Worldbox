@@ -56,6 +56,7 @@ static func create_new(p_seed: int, w: int, h: int, p_shape: String = "island", 
 	sim.rng = SimRng.new(p_seed)
 	sim.world = WorldGen.generate(p_seed, w, h, p_shape)
 	sim._init_systems()
+	sim.pathfinder.rebuild_components()
 	sim.history.record(0, HistoryLog.Kind.WORLD, "The world was shaped (seed %d, %dx%d %s)." % [p_seed, w, h, p_shape])
 	if populate:
 		sim.populate_default()
@@ -119,7 +120,7 @@ func _random_land_tile(min_fertility: float) -> int:
 func step() -> void:
 	var t0 := Time.get_ticks_usec()
 	tick += 1
-	pathfinder.begin_tick()
+	pathfinder.begin_tick(tick)
 	pathfinder.sync_changes()
 
 	var t := Time.get_ticks_usec()
@@ -247,8 +248,9 @@ func spawn_unit(species_idx: int, px: float, py: float, age_years: float = 20.0,
 	units.next_think[s] = tick + 1 + (s % SimConst.THINK_INTERVAL)
 	units.look[s] = _inherit_look(species_idx, mother_id, father_id)
 	units.name[s] = NameGen.person_name(def, rng) if def.sapient else def.name.trim_suffix("s")
-	units.add_child_link(mother_id, units.id[s])
-	units.add_child_link(father_id, units.id[s])
+	if def.sapient:
+		units.add_child_link(mother_id, units.id[s])
+		units.add_child_link(father_id, units.id[s])
 	return s
 
 
@@ -288,10 +290,13 @@ func kill_unit(s: int, cause: String) -> void:
 		deceased[uid] = {"name": units.name[s], "species": units.species[s], "born": units.birth_tick[s], "died": tick,
 			"cause": cause, "mother": units.mother[s], "father": units.father[s], "city": c, "sex": units.sex[s]}
 		if deceased.size() > DECEASED_CAP:
-			deceased.erase(deceased.keys()[0])
+			var evicted: int = deceased.keys()[0]
+			deceased.erase(evicted)
+			units.children.erase(evicted)
 	month_deaths += 1
 	total_deaths += 1
-	deaths_by_cause[cause] = int(deaths_by_cause.get(cause, 0)) + 1
+	var key := "%s: %s" % [(Defs.species[units.species[s]] as Defs.SpeciesDef).id, cause]
+	deaths_by_cause[key] = int(deaths_by_cause.get(key, 0)) + 1
 	units.free_slot(s)
 
 
@@ -321,6 +326,15 @@ func unit_at(px: float, py: float, radius: float = 1.2) -> int:
 func city_at_tile(i: int) -> City:
 	var c := world.owner[i]
 	return cities.get(c, null)
+
+
+## Total deaths whose cause matches `cause`, optionally for one species id ("human").
+func count_deaths(cause: String, species_id: String = "") -> int:
+	var n := 0
+	for k: String in deaths_by_cause:
+		if k.ends_with(": " + cause) and (species_id == "" or k.begins_with(species_id + ":")):
+			n += int(deaths_by_cause[k])
+	return n
 
 
 func count_species(sp: int) -> int:
@@ -358,6 +372,7 @@ func to_dict() -> Dictionary:
 		"deaths_by_cause": deaths_by_cause.duplicate(), "total_births": total_births, "total_deaths": total_deaths,
 		"deceased": deceased.duplicate(true), "pop_milestone": pop_milestone,
 		"civ_state": civ.to_dict(),
+		"components": pathfinder.components_to_dict(),
 	}
 
 
@@ -399,7 +414,14 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim.pop_milestone = int(d["pop_milestone"])
 	sim._init_systems()
 	sim.civ.from_dict(d["civ_state"])
+	sim.pathfinder.components_from_dict(d["components"])
 	return sim
+
+
+## Independent deep copy. to_dict() shares packed arrays with this simulation, so
+## an in-memory clone must go through serialization (exactly like a save file).
+func clone() -> Simulation:
+	return Simulation.from_dict(bytes_to_var(var_to_bytes(to_dict())))
 
 
 ## Content hash of all authoritative state. Equal hashes ⇒ equal worlds.

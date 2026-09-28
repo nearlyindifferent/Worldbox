@@ -231,6 +231,9 @@ func _nomad(s: int, ti: int, adult: bool) -> void:
 				return
 		_wander_near(s, ti, 4)
 		return
+	if u.has_flag(s, UnitStore.Flag.SETTLER):
+		_settler(s, ti)
+		return
 	var join := sim.civ.find_joinable_city(s, JOIN_SEARCH_RADIUS)
 	if join != null:
 		sim.civ.join_city(s, join)
@@ -255,6 +258,31 @@ func _nomad(s: int, ti: int, adult: bool) -> void:
 		_wander_near(s, lt, 3)
 		return
 	_wander_near(s, ti, 8)
+
+
+## Settlers travel to their chosen site, try to found there, scout nearby a few
+## times, and otherwise give up and become ordinary nomads.
+func _settler(s: int, ti: int) -> void:
+	var u := sim.units
+	var target := u.task_target[s]
+	var w := sim.world
+	if target >= 0 and Vector2(target % w.width - u.x[s], target / w.width - u.y[s]).length() > 3.0:
+		if _go(s, target, UnitStore.Task.FOUND_CITY):
+			return
+	if sim.civ.try_found_here(s, ti):
+		return
+	var tries := int(sim.civ.settler_attempts.get(u.id[s], 0)) + 1
+	sim.civ.settler_attempts[u.id[s]] = tries
+	if tries > 4:
+		u.set_flag(s, UnitStore.Flag.SETTLER, false)
+		sim.civ.settler_attempts.erase(u.id[s])
+		return
+	var better := sim.civ.scout_site(ti)
+	if better >= 0:
+		u.task_target[s] = better
+		_go(s, better, UnitStore.Task.FOUND_CITY)
+		return
+	_wander_near(s, ti, 6)
 
 
 func _wander_near(s: int, center: int, radius: int) -> void:
@@ -312,7 +340,8 @@ func _on_arrive(s: int) -> void:
 			_resolve_hunt(s)
 			return
 		UnitStore.Task.FOUND_CITY:
-			sim.civ.try_found_here(s, ti)
+			if not u.has_flag(s, UnitStore.Flag.SETTLER):
+				sim.civ.try_found_here(s, ti)
 	u.task[s] = UnitStore.Task.NONE
 	u.next_think[s] = sim.tick + 1
 
