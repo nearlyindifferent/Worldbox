@@ -378,7 +378,9 @@ func _on_work_done(s: int) -> void:
 					var jd := Defs.job_by_id("farmer")
 					w.vegetation[ti] = 0
 					w.mark_dirty(ti)
-					_receive(s, CARRY_FOOD, jd.yield_amount * (0.5 + 0.5 * w.fertility(ti)))
+					var soil := float(w.wood[ti]) / SimConst.SOIL_MAX
+					w.wood[ti] = maxi(0, w.wood[ti] - SimConst.SOIL_DRAIN)
+					_receive(s, CARRY_FOOD, jd.yield_amount * (0.5 + 0.5 * w.fertility(ti)) * (0.35 + 0.65 * soil))
 					# Keep harvesting neighbouring ripe fields before the walk to storage.
 					if u.carry_amount[s] < FARM_CARRY_LIMIT:
 						var city: City = sim.cities.get(u.city[s], null)

@@ -49,6 +49,13 @@ const FOREST_DIEBACK_CHANCE := 0.002
 ## Crop growth per VEG_CYCLE visit on farmland (0..255 maturity).
 const CROP_GROWTH := 90.0
 const CROP_MATURE := 240
+## Soil nutrients on farmland (stored in WorldGrid.wood, unused on farmland).
+## Each harvest drains SOIL_DRAIN; fields recover SOIL_RECOVER per vegetation visit
+## (~6 visits/year). Crop growth and yield scale with nutrients, so intensively
+## farmed land yields less and the land itself caps a city's food supply.
+const SOIL_MAX := 255
+const SOIL_DRAIN := 60
+const SOIL_RECOVER := 7
 
 const BUILDING_ID_NONE := -1
 const CITY_NONE := -1

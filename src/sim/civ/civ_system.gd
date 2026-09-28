@@ -11,6 +11,9 @@ const MAX_NEW_FIELDS_PER_PLAN := 2
 const TERRITORY_BASE := 80
 const TERRITORY_PER_PERSON := 8
 const MAX_CLAIMS_PER_PLAN := 4
+## A city only claims land within this many tiles of its town hall. Land is the
+## ultimate carrying capacity: growth beyond it must come from new settlements.
+const MAX_TERRITORY_RADIUS := 14.0
 const BIRTH_CHANCE := 0.18
 ## Births need stores covering this many months of the city's food need, so growth
 ## tracks food *production* rather than a fixed storage constant.
@@ -395,6 +398,7 @@ func _manage_fields(c: City) -> void:
 		if best < 0:
 			break
 		w.set_biome(best, Defs.farmland_index)
+		w.wood[best] = SimConst.SOIL_MAX
 		sim.pathfinder.refresh_tile_cost(best)
 		c.fields.append(best)
 		added += 1
@@ -708,6 +712,8 @@ func _expand_territory(c: City) -> void:
 			if w.owner[n] != SimConst.CITY_NONE or cand.has(n):
 				continue
 			var dist := Vector2(x + d.x - ccx, y + d.y - ccy).length()
+			if dist > MAX_TERRITORY_RADIUS:
+				continue
 			cand[n] = (w.fertility(n) * 2.0 if w.is_walkable(n) else -1.0) - dist * 0.15
 	var picked := 0
 	while picked < MAX_CLAIMS_PER_PLAN and not cand.is_empty():

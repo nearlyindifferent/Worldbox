@@ -59,10 +59,14 @@ func update() -> void:
 					continue
 				var v := w.vegetation[i]
 				if b == farmland:
+					var soil := w.wood[i]
 					if grow and v < 255:
-						var nv := mini(255, v + int(SimConst.CROP_GROWTH * (0.4 + 0.6 * w.moisture[i])))
+						var nutrient := 0.3 + 0.7 * float(soil) / SimConst.SOIL_MAX
+						var nv := mini(255, v + int(SimConst.CROP_GROWTH * (0.4 + 0.6 * w.moisture[i]) * nutrient))
 						w.vegetation[i] = nv
 						changed = changed or (nv >> 6) != (v >> 6)
+					if soil < SimConst.SOIL_MAX:
+						w.wood[i] = mini(SimConst.SOIL_MAX, soil + SimConst.SOIL_RECOVER)
 					continue
 				var vmax := Defs.biome_veg_max[b]
 				if grow and v < vmax:
