@@ -70,3 +70,32 @@ Resolution (commits 81bbab3, 95c8bc5, 2dca618; tests `tests/unit/test_save_fixtu
 Remaining (→ KNOWN_GAPS): component relabel is a full flood fill (≈ 37 ms on 512² once per ≤ 30 ticks after walkability edits); monthly breeding pass ≈ 5.7 ms on dense worlds; one tick can still exceed the 14 ms frame budget at very large populations (frames bounded by a single tick's cost).
 
 Status: fixes verified by builder with tests and long runs; **round 2 critics required** for verdicts. A deliberately hostile "hater" critic was added at the user's request (whole-product teardown).
+
+---
+
+## Features K (kingdoms, diplomacy, war), D (fire, disasters, plague), T (traits, wolves, stats), E (stone buildings)
+
+Acceptance conditions (builder-specified, critic-verified):
+- K: founding creates a realm; colonies stay loyal; opinions are sums of itemised reasons; wars draft soldiers, cause battle deaths and are explained in the decision log; undefended towns fall; exhaustion, stalemate and survival bring peace; distant disloyal provinces rebel after an occupation grace period; mid-war clones evolve identically. Tests: `test_kingdoms.*`.
+- D: fire spreads by biome, vegetation and moisture, burns out into scorched land that regrows, does not cross water, creatures flee or burn, rain douses; meteors crater and kill, lava cools into ashlands; quakes topple buildings; plague spreads, kills some and immunises survivors; a wildfire cannot erase a town; disasters survive save/clone identically. Tests: `test_disasters.*`.
+- T/E: traits pass on (both parents ~75 %), have their stated effects, exclusive pairs never co-occur; wolves hunt, attack only lone people when starving, and persist for decades. Tests: `test_life.*`; long-run evidence `tools/out/diag/wolves.gd`.
+
+### Round 2 — "Hater" whole-product critic (independent agent) — 2026-09-28
+Verdict: FAIL on iPad fit (toolbar and top bar off-screen at 1180×820, 1024×768, 820×1180), town-wiping disasters, early diplomacy dead ends, hover-only information, no onboarding, developer tools in the player bar, natural fire and plague over-tuned, chronicle naming the wrong place, noisy successions, bland names, clipped inspector. PASS on determinism, invariants, famine-spam fix, stale hover fix.
+Resolution (commits 7c1…–2527972, see git log): responsive power bar (2-row grid, portrait second row) and top bar, panels dock above the bar, inline power descriptions and store stats, welcome card with touch controls, World Stats replaces the performance button, fireproof halls, fire damping on settled land and large fires, dry-season lightning on unsettled land only, plague rate cut 4×, impacts chronicled before damage and rate-limited, merit-based leaders with epithets and one succession line, coups for one-town realms, landscape-aware town names and ten realm forms plus dynasties. Evidence: screenshots `tools/out/layout_{1180x820,1024x768,820x1180}/`, `tools/out/shots/{welcome,powerbar_desc,life_*,dis_*}.png`.
+Open (→ KNOWN_GAPS): no audio, no settings/UI scale, depth still below the reference (G-001), late-game slowdown of history (G-019).
+
+### Round 2 — Simulation/persistence critic (independent agent) — 2026-09-28
+Verified PASS: clone and save/load mid-fire, mid-plague, mid-quake, mid-lava and mid-war stay hash-identical (300–720 ticks, two seeds); 150-year runs keep invariants.
+Findings and resolution:
+1. Schema 4 changed after being pushed → schema 5 for traits, shipped schema-4 fixtures restored as migration tests (D-024).
+2. Unvalidated diplomacy records; an aborted invariant check accepted a bad save → full pair validation; `SimInvariants.completed` gate; tests for junk pairs and missing fields.
+3. Wildfires abandoning towns → fireproof halls, hall rebuild (D-026), test `test_a_wildfire_does_not_wipe_out_a_town`.
+4. `_fire_units` scanned all units → chunk-limited (34 ms → ~0 at 20k units).
+5. Diplomacy cubic cost → cached enemies/strength, neighbour-only relations (1050 ms → 4.7 ms per month at 64 kingdoms).
+6. Undo resurrected untracked lava; painted-over fires kept burning → `DisasterSystem.on_tile_changed`, lava-tracking invariant, test.
+7. Every burned biome became grassland → only grass and forest scorch.
+8. Unbounded disaster/plague/trait save data → bounds + hostile tests.
+9. Loaders set arbitrary keys → whitelisted fields; NaN/duplicate checks.
+10–13. Large-fire cost damped; plague scan skipped when nobody is sick; peace bonus capped; move-cost changes always reach the pathfinder.
+Also found by the builder while fixing these: same-capacity unit compaction left a stale waypoint cache (reload divergence), regression test added; the test runner reported script-error-aborted tests as passing (D-031).
