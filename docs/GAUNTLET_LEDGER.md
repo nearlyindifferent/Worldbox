@@ -36,3 +36,25 @@ Evidence locations: `tools/out/` (screenshots, bench JSON — not committed; reg
 
 ## Critic rounds
 (appended below per round)
+
+### Round 1 — Visual/UI critic (independent agent, fresh context) — 2026-09-28
+Verdicts: S0.2 Camera **FAIL** (grey void past bounds) · S0.3 Time UI PASS (minor) · S0.4 Terrain UX **FAIL** (tabs unusable by mouse, multi-active tabs, placeholder swatches) · S0.13 Inspector PASS (minor) · S0.15 Admin PASS (weak: width jumps, empty decision log) · S0.16 Perf overlay PASS (hidden by admin) · Player UI bar **FAIL** · Art direction **FAIL** (buildings culled, one house sprite, unit/roof same hue, stair-step biome edges, banner pile-ups).
+
+Critical defects and resolution (builder, verified by re-running the critic's own scenarios `tools/out/critic_ui/s2/s4/s8.json` + `tools/scenarios/toolbar_tabs.json`):
+| Defect | Root cause | Fix | Evidence |
+|---|---|---|---|
+| Buildings vanish by camera position | MultiMesh auto-AABB stale after buffer upload → whole batch culled | `custom_aabb` world-sized in `SpriteBatch.setup` | Whitehaven z4 now shows all buildings (s8_03 re-run) |
+| Category tabs snap back | `_show_category` → `_sync` forced category of current power | Browsing decoupled from selection; explicit exclusive pressed state | tabs_03: Divine shown while Raise selected; clicking Smite selects it |
+| Several tabs lit | `set_pressed_no_signal` doesn't release group peers | Set every tab state explicitly | tabs_04 |
+| Placeholder swatches | Icons sampled tile art | Framed swatch + pictogram per biome | `assets_icons.png` |
+| Grey void | Clamp allowed 25% viewport overshoot; default clear grey | Clamp to world ± 48 px, center when smaller; sea-coloured clear | tabs_04 |
+| Banner pile-ups/ghosts | No declutter; fade at zoom | Population-priority placement with overlap rejection; opaque | s4/tabs shots |
+| Panel collisions | Independent absolute positions | Chronicle/admin share one left dock; perf docks beside it; toasts narrower | tabs_05/06 |
+| Unit/roof same hue, weak shadows | Roofs tinted fully by city color | Roofs mixed 55% toward thatch; wider shadow | s8_03 re-run |
+| Stair-step biome edges, stripy hills | Full-tile fills | Dithered 2-px transitions in shader; varied hill art | s8_03 re-run |
+| One house sprite | Kit too small | +2 variants (stone cottage, timber longhouse) | `assets_buildings.png` |
+| Minor: empty hover box, stale hover, toast dupes, number formatting, bars without values, children cap, follow state, Shift+F side effect, key 1 = pause, admin width/decision log, entity order, chronicle noise | — | All addressed (see commit 75f1bde) | tabs_07/08 |
+
+Deferred with justification → KNOWN_GAPS: roads/props between buildings (G-012, Phase 3), full autotile edge sets (Art Gauntlet, Phase 12), per-power cursor sprites, more human templates (Phase 6 genetics).
+
+Status: UI/art items re-verified by builder; **a fresh critic round is required** before marking PASS (the builder may not grade itself).
