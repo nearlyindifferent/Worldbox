@@ -10,10 +10,14 @@ extends SceneTree
 ##   key{key, ctrl?, shift?} | click{x,y,button?} (screen) | drag{x0,y0,x1,y1,button?} | hover{x,y}
 ##   panel{name: admin|history|perf|menu, on} | speed{i} | save{slot} | load{slot} | new_world{seed,size,shape}
 ##   admin_tab{index} | overlay{index} | print{what: perf|hash|stats|selection} | assert_panel{name, visible}
+##   record_start{name} | record_stop  (saves every rendered frame; run godot with --fixed-fps 30)
+##   brush may use {"city": index, "dx", "dy"} instead of x/y to target tiles near a city
 
 var _out := "res://tools/out/shots"
 var game: Game
 var _log := PackedStringArray()
+var _recording := ""
+var _rec_frame := 0
 
 
 func _initialize() -> void:
@@ -35,6 +39,7 @@ func _initialize() -> void:
 			return
 	else:
 		steps = [{"do": "frames", "n": 5}, {"do": "shot", "name": "default"}]
+	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	var scene: PackedScene = load("res://scenes/main.tscn")
 	var main := scene.instantiate()
 	root.add_child(main)
@@ -117,11 +122,26 @@ func _step(st: Dictionary) -> void:
 			await _frames(1)
 		"radius":
 			game.set_brush_radius(int(st["value"]))
+		"record_start":
+			_recording = str(st.get("name", "clip"))
+			_rec_frame = 0
+		"record_stop":
+			_log.append("recorded %d frames of %s" % [_rec_frame, _recording])
+			_recording = ""
 		"brush":
+			var bx := int(st.get("x", 0))
+			var by := int(st.get("y", 0))
+			if st.has("city"):
+				var cl := game.sim.cities.values()
+				if cl.size() > int(st["city"]):
+					var cc: City = cl[int(st["city"])]
+					bx = cc.center % game.sim.world.width + int(st.get("dx", 0))
+					by = cc.center / game.sim.world.width + int(st.get("dy", 0))
+			game.fx.brush_tile = Vector2i(bx, by)
 			game.sim.apply_command({"op": "stroke_begin"})
-			var r := game.sim.apply_command({"op": "brush", "power": game.power, "x": int(st["x"]), "y": int(st["y"]), "radius": game.brush_radius})
+			var r := game.sim.apply_command({"op": "brush", "power": game.power, "x": bx, "y": by, "radius": game.brush_radius})
 			game.sim.apply_command({"op": "stroke_end"})
-			game.fx.add_effect(Powers.effect_kind(game.power), Vector2i(int(st["x"]), int(st["y"])), game.brush_radius)
+			game.fx.add_effect(Powers.effect_kind(game.power), Vector2i(bx, by), game.brush_radius)
 			_log.append("brush %s -> %s" % [game.power, str(r)])
 			await _frames(2)
 		"key":
@@ -217,6 +237,14 @@ func _step(st: Dictionary) -> void:
 			_log.append("assert_panel %s visible=%s expected=%s %s" % [st["name"], vis, st["visible"], "OK" if vis == bool(st["visible"]) else "MISMATCH"])
 		_:
 			_log.append("unknown step %s" % op)
+
+
+func _on_frame_drawn() -> void:
+	if _recording == "":
+		return
+	var img := root.get_texture().get_image()
+	img.save_png(_out.path_join("%s_%05d.png" % [_recording, _rec_frame]))
+	_rec_frame += 1
 
 
 func _nth_unit(n: int, species: String) -> int:
