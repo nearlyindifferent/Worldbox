@@ -18,6 +18,12 @@ var follow_callable: Callable
 var _dragging := false
 var _drag_last := Vector2.ZERO
 var input_enabled := true
+## Active touch points (index -> screen position) for two-finger pan / pinch.
+var _touches := {}
+
+
+func multi_touch_active() -> bool:
+	return _touches.size() >= 2
 
 
 func _ready() -> void:
@@ -69,6 +75,33 @@ func handle_input(event: InputEvent) -> bool:
 		_drag_last = mm.position
 		follow_callable = Callable()
 		return true
+	elif event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			_touches[st.index] = st.position
+		else:
+			_touches.erase(st.index)
+		return _touches.size() >= 2
+	elif event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		if not _touches.has(sd.index):
+			return false
+		var before: Vector2 = _touches[sd.index]
+		if _touches.size() >= 2:
+			# Pinch: scale by the change in finger spread around the midpoint; pan by half the drag.
+			var other := Vector2.ZERO
+			for k: int in _touches:
+				if k != sd.index:
+					other = _touches[k]
+					break
+			var d0 := before.distance_to(other)
+			var d1 := sd.position.distance_to(other)
+			if d0 > 8.0 and d1 > 8.0:
+				_zoom_at(d1 / d0, (sd.position + other) * 0.5)
+			target_pos -= (sd.position - before) * 0.5 / zoom.x
+			follow_callable = Callable()
+		_touches[sd.index] = sd.position
+		return _touches.size() >= 2
 	elif event is InputEventMagnifyGesture:
 		var g := event as InputEventMagnifyGesture
 		_zoom_at(g.factor, g.position)
@@ -146,3 +179,9 @@ func visible_tiles_rect() -> Rect2:
 	var vp := get_viewport_rect().size / zoom.x
 	var r := Rect2(position - vp * 0.5, vp)
 	return Rect2(r.position / AssetForge.TILE, r.size / AssetForge.TILE)
+
+
+## Pans by a screen-space delta (used for one-finger / left-drag panning).
+func pan_screen(delta_px: Vector2) -> void:
+	target_pos -= delta_px / zoom.x
+	follow_callable = Callable()

@@ -107,7 +107,7 @@ func _build_entities() -> void:
 	_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_search.text_changed.connect(func(_t: String) -> void: _run_search())
 	row.add_child(_search)
-	for f in ["All", "Humans", "Animals", "Cities", "Favorites", "Leaders", "Starving"]:
+	for f in ["All", "Humans", "Animals", "Cities", "Kingdoms", "Favorites", "Leaders", "Starving", "Soldiers"]:
 		_filter.add_item(f)
 	_filter.item_selected.connect(func(_i: int) -> void: _run_search())
 	row.add_child(_filter)
@@ -133,7 +133,12 @@ func _run_search() -> void:
 		if mode in ["All", "Cities"] and (q == "" or c.name.to_lower().contains(q) or str(c.id) == q):
 			_results.add_item("[city %d] %s  pop %d  food %d  wood %d" % [c.id, c.name, c.population(), int(c.storage["food"]), int(c.storage["wood"])])
 			_result_refs.append(["city", c.id])
-	if mode == "Cities":
+	if mode in ["All", "Kingdoms"]:
+		for kg: Kingdom in sim.kingdoms.values():
+			if q == "" or kg.name.to_lower().contains(q) or str(kg.id) == q:
+				_results.add_item("[kingdom %d] %s  cities %d  people %d  %s" % [kg.id, kg.name, kg.cities.size(), sim.realm.population(kg), "AT WAR" if sim.realm.is_at_war(kg.id) else ""])
+				_result_refs.append(["kingdom", kg.id])
+	if mode in ["Cities", "Kingdoms"]:
 		return
 	var u := sim.units
 	var slots: Array[int] = []
@@ -159,6 +164,8 @@ func _run_search() -> void:
 			continue
 		if mode == "Starving" and u.hunger[s] < SimConst.HUNGER_URGENT:
 			continue
+		if mode == "Soldiers" and Defs.jobs[u.job[s]].id != "soldier":
+			continue
 		var city_name := ""
 		if sim.cities.has(u.city[s]):
 			city_name = (sim.cities[u.city[s]] as City).name
@@ -174,6 +181,8 @@ func _pick_result(i: int) -> void:
 		game.focus_city(r[1])
 	elif r[0] == "unit":
 		game.focus_unit(r[1])
+	elif r[0] == "kingdom":
+		game.select_kingdom(r[1])
 
 
 # ---------------------------------------------------------------- selected
@@ -378,7 +387,7 @@ func _build_debug() -> void:
 	v.add_child(HSeparator.new())
 	var dr := HBoxContainer.new()
 	dr.add_child(UiTheme.label("AI decisions", "GoldLabel"))
-	for f in ["all", "settlement", "construction", "succession", "shortage"]:
+	for f in ["all", "settlement", "construction", "succession", "shortage", "war", "rebellion"]:
 		_dec_filter.add_item(f)
 	_dec_filter.item_selected.connect(func(_i: int) -> void: _refresh_decisions())
 	dr.add_child(_dec_filter)

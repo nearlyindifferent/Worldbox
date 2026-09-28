@@ -35,6 +35,7 @@ const TOP_KEYS := {
 	"decisions": TYPE_DICTIONARY, "stats": TYPE_DICTIONARY, "month_births": TYPE_INT, "month_deaths": TYPE_INT,
 	"deaths_by_cause": TYPE_DICTIONARY, "total_births": TYPE_INT, "total_deaths": TYPE_INT, "deceased": TYPE_DICTIONARY,
 	"pop_milestone": TYPE_INT, "civ_state": TYPE_DICTIONARY, "components": TYPE_DICTIONARY, "undo": TYPE_ARRAY,
+	"kingdoms": TYPE_ARRAY, "next_kingdom_id": TYPE_INT, "realm": TYPE_DICTIONARY,
 }
 
 
@@ -65,6 +66,16 @@ static func validate(d: Dictionary) -> String:
 		err = _building(b, int(wd["w"]), int(wd["h"]))
 		if err != "":
 			return err
+	for kd: Variant in d["kingdoms"]:
+		if typeof(kd) != TYPE_DICTIONARY:
+			return "kingdom entry is not a dictionary"
+		for k: String in ["id", "species", "color_index", "capital", "ruler_id", "parent", "founded_tick"]:
+			if typeof(kd.get(k)) != TYPE_INT:
+				return "kingdom.%s missing" % k
+		if typeof(kd.get("cities")) != TYPE_PACKED_INT32_ARRAY or int(kd["color_index"]) < 0 or int(kd["color_index"]) >= AssetForge.CITY_COLORS.size():
+			return "kingdom data invalid"
+	if typeof((d["realm"] as Dictionary).get("pairs")) != TYPE_DICTIONARY:
+		return "diplomacy data missing"
 	var comp: Dictionary = d["components"]
 	if typeof(comp.get("labels")) != TYPE_PACKED_INT32_ARRAY or not ((comp["labels"] as PackedInt32Array).size() in [0, size]):
 		return "bad component labels"
@@ -137,7 +148,7 @@ static func _units(ud: Dictionary, world_size: int, w: int, h: int) -> String:
 static func _city(c: Variant, world_size: int) -> String:
 	if typeof(c) != TYPE_DICTIONARY:
 		return "city entry is not a dictionary"
-	for k: String in ["id", "species", "center", "founded_tick", "color_index"]:
+	for k: String in ["id", "species", "center", "founded_tick", "color_index", "kingdom"]:
 		if typeof(c.get(k)) != TYPE_INT:
 			return "city.%s missing" % k
 	for k: String in ["members", "territory", "fields", "buildings"]:

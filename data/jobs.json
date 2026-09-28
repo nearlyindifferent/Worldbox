@@ -7,6 +7,7 @@
     {"id": "woodcutter", "index": 3, "name": "Woodcutter", "resource": "wood",  "work_ticks": 40, "yield": 4.0, "wood_cost": 40, "search_radius": 16},
     {"id": "miner",      "index": 4, "name": "Quarrier",   "resource": "stone", "work_ticks": 50, "yield": 3.0, "search_radius": 18},
     {"id": "builder",    "index": 5, "name": "Builder",    "resource": "",      "work_ticks": 20, "yield": 0.0, "search_radius": 0},
-    {"id": "hunter",     "index": 6, "name": "Hunter",     "resource": "food",  "work_ticks": 8,  "yield": 0.0, "search_radius": 16}
+    {"id": "hunter",     "index": 6, "name": "Hunter",     "resource": "food",  "work_ticks": 8,  "yield": 0.0, "search_radius": 16},
+    {"id": "soldier",    "index": 7, "name": "Soldier",    "resource": "",      "work_ticks": 6,  "yield": 0.0, "search_radius": 10, "damage": 11.0}
   ]
 }

@@ -4,7 +4,7 @@ extends RefCounted
 ## advances it in fixed ticks. Contains no rendering or UI code and never reads
 ## frame time, so the same seed + command stream reproduces the same world.
 
-const SAVE_SCHEMA := 2
+const SAVE_SCHEMA := 3
 
 var seed_value: int = 0
 var shape: String = "island"
@@ -16,6 +16,8 @@ var cities: Dictionary = {}     ## id -> City (insertion order = founding order)
 var buildings: Dictionary = {}  ## id -> Building
 var next_city_id: int = 1
 var next_building_id: int = 1
+var kingdoms: Dictionary = {}   ## id -> Kingdom
+var next_kingdom_id: int = 1
 var rng: SimRng
 var laws := WorldLaws.new()
 var history := HistoryLog.new()
@@ -43,6 +45,10 @@ var movement: MovementSystem
 var human_ai: HumanAI
 var animal_ai: AnimalAI
 var civ: CivSystem
+var realm: KingdomSystem
+## Transient presentation events (hits, conquests). Never saved or hashed; drained by the view.
+var fx_events: Array[Dictionary] = []
+const FX_CAP := 256
 var vegetation: VegetationSystem
 var editor: TerrainEditor
 var timings: Dictionary = {}    ## system -> smoothed microseconds per tick
@@ -77,6 +83,7 @@ func _init_systems() -> void:
 	human_ai = HumanAI.new(self)
 	animal_ai = AnimalAI.new(self)
 	civ = CivSystem.new(self)
+	realm = KingdomSystem.new(self)
 	vegetation = VegetationSystem.new(self)
 	editor = TerrainEditor.new(self)
 	for n in ["population", "humans", "animals", "cities", "food", "births", "deaths"]:
@@ -158,6 +165,8 @@ func step() -> void:
 	var hs := human_species
 	var now := tick
 	var think := SimConst.THINK_INTERVAL
+	var job := units.job
+	var soldier_job := Defs.job_by_id("soldier").index
 	for s in units.capacity:
 		if alive[s] == 0 or (flags[s] & frozen_bit) != 0:
 			continue
@@ -165,7 +174,9 @@ func step() -> void:
 		if e == 0:
 			var st := state[s]
 			if st == moving:
-				if species[s] != hs or hunger[s] < SimConst.HUNGER_URGENT or (now + s) % think != 0:
+				if species[s] != hs or (now + s) % think != 0:
+					continue
+				if hunger[s] < SimConst.HUNGER_URGENT and job[s] != soldier_job:
 					continue
 			elif st == idle and now < next_think[s]:
 				continue
@@ -183,6 +194,9 @@ func step() -> void:
 		units.compact()
 		spatial.rebuild(units)
 	if tick % SimConst.TICKS_PER_MONTH == 0:
+		t = Time.get_ticks_usec()
+		realm.monthly()
+		_time("kingdoms", t)
 		t = Time.get_ticks_usec()
 		animal_ai.monthly_reproduction()
 		_sample_stats()
@@ -305,6 +319,32 @@ func _inherit_look(species_idx: int, mother_id: int, father_id: int) -> int:
 	return out
 
 
+## Breaks the Simulation <-> system reference cycles so a discarded world is freed.
+## RefCounted objects that point back at each other are never released otherwise.
+func dispose() -> void:
+	life = null
+	movement = null
+	human_ai = null
+	animal_ai = null
+	civ = null
+	realm = null
+	vegetation = null
+	editor = null
+	pathfinder = null
+	spatial = null
+	cities.clear()
+	buildings.clear()
+	kingdoms.clear()
+
+
+func push_fx(kind: String, tile: int, extra: Dictionary = {}) -> void:
+	if fx_events.size() >= FX_CAP:
+		return
+	var e := {"kind": kind, "tile": tile}
+	e.merge(extra)
+	fx_events.append(e)
+
+
 func kill_unit(s: int, cause: String) -> void:
 	if units.alive[s] == 0:
 		return
@@ -391,6 +431,9 @@ func to_dict() -> Dictionary:
 	var bld_list: Array = []
 	for b: Building in buildings.values():
 		bld_list.append(b.to_dict())
+	var kingdom_list: Array = []
+	for kg: Kingdom in kingdoms.values():
+		kingdom_list.append(kg.to_dict())
 	var stat_d := {}
 	for k: String in stats:
 		stat_d[k] = (stats[k] as StatSeries).to_dict()
@@ -403,6 +446,7 @@ func to_dict() -> Dictionary:
 		"units": units.to_dict(),
 		"cities": city_list, "buildings": bld_list,
 		"next_city_id": next_city_id, "next_building_id": next_building_id,
+		"kingdoms": kingdom_list, "next_kingdom_id": next_kingdom_id, "realm": realm.to_dict(),
 		"laws": laws.to_dict(), "history": history.to_dict(), "decisions": decisions.to_dict(),
 		"stats": stat_d, "month_births": month_births, "month_deaths": month_deaths,
 		"deaths_by_cause": deaths_by_cause.duplicate(), "total_births": total_births, "total_deaths": total_deaths,
@@ -433,6 +477,10 @@ static func from_dict(d: Dictionary) -> Simulation:
 	for bd: Dictionary in d["buildings"]:
 		var b := Building.from_dict(bd)
 		sim.buildings[b.id] = b
+	for kd: Dictionary in d["kingdoms"]:
+		var kg := Kingdom.from_dict(kd)
+		sim.kingdoms[kg.id] = kg
+	sim.next_kingdom_id = int(d["next_kingdom_id"])
 	sim.next_city_id = int(d["next_city_id"])
 	sim.next_building_id = int(d["next_building_id"])
 	sim.laws.from_dict(d["laws"])
@@ -452,6 +500,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim.pop_milestone = int(d["pop_milestone"])
 	sim._init_systems()
 	sim.civ.from_dict(d["civ_state"])
+	sim.realm.from_dict(d["realm"])
 	sim.pathfinder.components_from_dict(d["components"])
 	sim.editor.undo_stack.assign(d["undo"])
 	return sim

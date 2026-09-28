@@ -25,7 +25,8 @@ const MAT_COLORS := {
 }
 
 ## Unit atlas frame indices.
-enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW }
+enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW,
+	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
 enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D }
@@ -211,7 +212,8 @@ static func _stump(img: Image, x: int, y: int, wood: Color, dark: Color) -> void
 # ---------------------------------------------------------------- units
 
 static func build_unit_atlas() -> Image:
-	var rows := 2
+	@warning_ignore("integer_division")
+	var rows := (UF.size() + UNIT_ATLAS_COLS - 1) / UNIT_ATLAS_COLS
 	var img := Image.create(UNIT_ATLAS_COLS * UNIT_FRAME, rows * UNIT_FRAME, false, Image.FORMAT_RGBA8)
 	for f in UF.size():
 		var ox := (f % UNIT_ATLAS_COLS) * UNIT_FRAME
@@ -312,6 +314,24 @@ static func _draw_unit_frame(img: Image, f: int, ox: int, oy: int) -> void:
 			for x in range(2, 6):
 				_m(img, ox + x, oy + 5, Mat.STONE, 150 if x == 2 else 128)
 				_m(img, ox + x, oy + 6, Mat.STONE_SHADE)
+		UF.SOLDIER_IDLE, UF.SOLDIER_WALK_A, UF.SOLDIER_WALK_B, UF.SOLDIER_ATTACK:
+			var pose := f - UF.SOLDIER_IDLE
+			# Body reuses the man frames, then helmet and spear are drawn over it.
+			_draw_unit_frame(img, UF.MAN_IDLE + (pose if pose < 3 else 3), ox, oy)
+			var x0 := ox + 2
+			for x in range(1, 4):
+				_m(img, x0 + x, oy + 0, Mat.STONE, 150 if x == 1 else 115)
+			_m(img, x0 + 0, oy + 1, Mat.STONE, 90)
+			_m(img, x0 + 4, oy + 1, Mat.STONE, 90)
+			_m(img, x0 + 2, oy + 3, Mat.BANNER, 150)
+			if pose == 3:
+				for x in range(3, 8):
+					_m(img, ox + x, oy + 3, Mat.WOOD_LIGHT)
+				_m(img, ox + 7, oy + 2, Mat.WHITE, 110)
+			else:
+				for y in range(0, 7):
+					_m(img, x0 + 5, oy + y, Mat.WOOD_LIGHT)
+				_m(img, x0 + 5, oy - 1 + 1, Mat.WHITE, 110)
 		UF.SHADOW:
 			for x in range(1, 7):
 				_m(img, ox + x, oy + 7, Mat.OUTLINE, 60)
@@ -491,7 +511,8 @@ const ICON_IDS := ["inspect", "raise", "lower", "paint_grass", "paint_soil", "pa
 	"paint_ocean", "paint_deep", "paint_mountain", "paint_hills", "paint_forest", "paint_desert", "paint_snow",
 	"paint_swamp", "paint_ash", "paint_mystic", "spawn_human", "spawn_sheep", "smite", "bless", "undo",
 	"pause", "play", "fast", "faster", "fastest", "save", "load", "history", "admin", "close", "plus", "minus",
-	"people", "city", "food", "wood", "stone", "house", "star", "skull", "heart", "perf", "world", "follow"]
+	"people", "city", "food", "wood", "stone", "house", "star", "skull", "heart", "perf", "world", "follow",
+	"incite_war", "forge_peace", "spark_rebellion", "crown", "kingdom"]
 
 
 static func icon_index(id: String) -> int:
@@ -625,6 +646,29 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 		"world":
 			_circle(img, ox + 8, 8, 6, Color("#3a7ac0"), true)
 			_pattern(img, ox + 4, 4, [".##..", "####.", ".###.", "..#.#", "...##"], Color("#6aa83c"))
+		"incite_war":
+			for k in 11:
+				_px(img, ox + 2 + k, 2 + k, Color("#d0d8e0"))
+				_px(img, ox + 13 - k, 2 + k, Color("#d0d8e0"))
+			_rect(img, ox + 1, 11, 4, 2, Color("#8f6440"))
+			_rect(img, ox + 11, 11, 4, 2, Color("#8f6440"))
+			_px(img, ox + 7, 7, Color("#e05a4a"))
+			_px(img, ox + 8, 7, Color("#e05a4a"))
+		"forge_peace":
+			for y in range(2, 15):
+				_px(img, ox + 4, y, Color("#8f6440"))
+			_pattern(img, ox + 5, 2, ["#######", "########", "#######.", "######..", "#######."], Color("#f4f0e8"))
+		"spark_rebellion":
+			_pattern(img, ox + 5, 1, ["..#...", ".###..", ".####.", "######", ".####."], Color("#f0a030"))
+			_pattern(img, ox + 6, 2, ["..#..", ".##.."], Color("#fff2a0"))
+			for y in range(6, 15):
+				_px(img, ox + 7, y, Color("#8f6440"))
+				_px(img, ox + 8, y, Color("#5a3a22"))
+		"crown", "kingdom":
+			_pattern(img, ox + 2, 4, ["#...#...#...", "##.###.###..", "###########.", "###########.", "###########."], gold)
+			_px(img, ox + 4, 7, Color("#e05a4a"))
+			_px(img, ox + 7, 7, Color("#3c6ec8"))
+			_px(img, ox + 10, 7, Color("#3ca05a"))
 		"follow":
 			_circle(img, ox + 8, 8, 5, paper, false)
 			_circle(img, ox + 8, 8, 1, gold, true)

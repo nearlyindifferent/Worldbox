@@ -15,9 +15,11 @@ var visible_count: int = 0
 var _body := SpriteBatch.new()
 var _items := SpriteBatch.new()
 var _anim_t := 0.0
+var _soldier_job: int = -1
 
 
 func _ready() -> void:
+	_soldier_job = Defs.job_by_id("soldier").index
 	var atlas := AssetForge.build_unit_atlas_cached()
 	var fs := Vector2(AssetForge.UNIT_FRAME, AssetForge.UNIT_FRAME)
 	_body.setup(atlas, fs, AssetForge.UNIT_ATLAS_COLS)
@@ -63,6 +65,8 @@ func update_view(view_rect_tiles: Rect2, zoom: float, delta: float) -> void:
 		if u.species[s] == sim.human_species:
 			var female := u.sex[s] == UnitStore.SEX_FEMALE
 			var base := AssetForge.UF.WOMAN_IDLE if female else AssetForge.UF.MAN_IDLE
+			if u.job[s] == _soldier_job:
+				base = AssetForge.UF.SOLDIER_IDLE
 			frame = base
 			if working:
 				frame = base + (3 if (step + s) % 2 == 0 else 0)

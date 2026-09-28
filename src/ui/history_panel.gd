@@ -8,7 +8,7 @@ var _filter := OptionButton.new()
 var _timer := 0.0
 var _last_total := -1
 var _entries: Array[Dictionary] = []
-const FILTERS := ["Notable events", "Everything", "Major only", "Settlements", "Leaders", "Hardship"]
+const FILTERS := ["Notable events", "Everything", "Major only", "Settlements", "Leaders", "Hardship", "War & politics"]
 
 
 func _ready() -> void:
@@ -70,6 +70,8 @@ func _process(delta: float) -> void:
 			continue
 		if mode == 5 and not (k in [HistoryLog.Kind.FAMINE, HistoryLog.Kind.DISASTER, HistoryLog.Kind.CITY_ABANDONED]):
 			continue
+		if mode == 6 and not (k in [HistoryLog.Kind.KINGDOM_FOUNDED, HistoryLog.Kind.WAR_DECLARED, HistoryLog.Kind.PEACE, HistoryLog.Kind.CITY_CONQUERED, HistoryLog.Kind.REBELLION, HistoryLog.Kind.KINGDOM_FALLEN]):
+			continue
 		var idx := _list.add_item("%s  %s" % [_short_date(int(e["tick"])), e["text"]])
 		if k in HistoryLog.MAJOR:
 			_list.set_item_custom_fg_color(idx, UiTheme.GOLD)
@@ -86,7 +88,11 @@ func _jump(i: int) -> void:
 		return
 	var e := _entries[i]
 	var refs: Dictionary = e["refs"]
-	if refs.has("unit") and game.sim.units.is_alive_id(int(refs["unit"])):
+	if refs.has("kingdom") and game.sim.kingdoms.has(int(refs["kingdom"])) and int(e["kind"]) in [HistoryLog.Kind.WAR_DECLARED, HistoryLog.Kind.PEACE, HistoryLog.Kind.KINGDOM_FOUNDED, HistoryLog.Kind.REBELLION]:
+		game.select_kingdom(int(refs["kingdom"]))
+		if int(e["tile"]) >= 0:
+			game.camera.jump_to(game.tile_center_px(int(e["tile"])))
+	elif refs.has("unit") and game.sim.units.is_alive_id(int(refs["unit"])):
 		game.focus_unit(int(refs["unit"]))
 	elif refs.has("city") and game.sim.cities.has(int(refs["city"])):
 		game.focus_city(int(refs["city"]))

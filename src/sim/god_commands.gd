@@ -123,6 +123,32 @@ static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 				return _fail("No such city")
 			sim.civ.abandon_city(c, "the gods willed it")
 			return _ok()
+		"declare_war":
+			var ka: Kingdom = sim.kingdoms.get(int(cmd["a"]), null)
+			var kb: Kingdom = sim.kingdoms.get(int(cmd["b"]), null)
+			if ka == null or kb == null or ka == kb:
+				return _fail("Two different kingdoms are needed")
+			if sim.realm.at_war(ka.id, kb.id):
+				return _fail("They are already at war")
+			sim.realm.declare_war(ka, kb, [["cause", str(cmd.get("reason", "divine provocation"))]])
+			return _ok("War between the %s and the %s" % [ka.name, kb.name])
+		"make_peace":
+			var ka2: Kingdom = sim.kingdoms.get(int(cmd["a"]), null)
+			if ka2 == null:
+				return _fail("No such kingdom")
+			var n := 0
+			for foe in sim.realm.enemies_of(ka2.id):
+				if cmd.has("b") and int(cmd["b"]) != foe:
+					continue
+				sim.realm.make_peace(ka2, sim.kingdoms[foe], [["cause", "divine intervention"]])
+				n += 1
+			return _ok("Peace made (%d wars ended)" % n) if n > 0 else _fail("Not at war")
+		"rebel":
+			var rc: City = sim.cities.get(int(cmd["city"]), null)
+			if rc == null:
+				return _fail("No such city")
+			var nk := sim.realm.rebel(rc, [["cause", "stirred up by the gods"]])
+			return _ok("%s rebelled" % rc.name, {"kingdom": nk.id}) if nk != null else _fail("Only a city of a multi-city kingdom can rebel")
 		"set_leader":
 			var c: City = sim.cities.get(int(cmd["city"]), null)
 			var s := _slot(sim, cmd)
@@ -159,6 +185,29 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 					n += 1
 			sim.spatial.rebuild(sim.units)
 			return _ok("", {"killed": n})
+		"incite_war", "forge_peace", "spark_rebellion":
+			var i := sim.world.idx(clampi(x, 0, sim.world.width - 1), clampi(y, 0, sim.world.height - 1))
+			var c: City = sim.cities.get(sim.world.owner[i], null)
+			if c == null:
+				return _fail("Use this on a city's territory")
+			if power == "spark_rebellion":
+				return execute(sim, {"op": "rebel", "city": c.id})
+			if power == "forge_peace":
+				return execute(sim, {"op": "make_peace", "a": c.kingdom})
+			# Incite: this kingdom attacks its nearest neighbouring kingdom.
+			var w := sim.world.width
+			var best := -1
+			var best_d := INF
+			for other: City in sim.cities.values():
+				if other.kingdom == c.kingdom or sim.realm.at_war(c.kingdom, other.kingdom):
+					continue
+				var d := Vector2(other.center % w - c.center % w, other.center / w - c.center / w).length()
+				if d < best_d:
+					best_d = d
+					best = other.kingdom
+			if best < 0:
+				return _fail("No neighbouring kingdom to fight")
+			return execute(sim, {"op": "declare_war", "a": c.kingdom, "b": best, "reason": "incited by the gods"})
 		"bless":
 			var n := 0
 			for s in sim.spatial.query_radius(sim.units, x + 0.5, y + 0.5, maxf(0.8, r)):

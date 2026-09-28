@@ -31,6 +31,8 @@ var deaths: int = 0
 var starving_months: int = 0
 var founding_reasons: Array = []     ## [[label, value], ...] explaining why it was founded
 var alive: bool = true
+var kingdom: int = -1                ## owning Kingdom id
+var loyalty: float = 100.0           ## 0..100; low loyalty far from the capital breeds rebellion
 
 
 func _init() -> void:
@@ -84,6 +86,7 @@ func to_dict() -> Dictionary:
 		"last_consumed": last_consumed.duplicate(), "job_counts": job_counts, "job_targets": job_targets,
 		"births": births, "deaths": deaths, "starving_months": starving_months,
 		"founding_reasons": founding_reasons.duplicate(true), "alive": alive,
+		"kingdom": kingdom, "loyalty": loyalty,
 	}
 
 

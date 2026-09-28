@@ -78,6 +78,9 @@ func _rebuild() -> void:
 	elif game.selected_city >= 0 and game.sim.cities.has(game.selected_city):
 		visible = true
 		_build_city()
+	elif game.selected_kingdom >= 0 and game.sim.kingdoms.has(game.selected_kingdom):
+		visible = true
+		_build_kingdom()
 	else:
 		visible = false
 
@@ -93,6 +96,11 @@ func _refresh() -> void:
 			game.select_city(-1)
 			return
 		_refresh_city()
+	elif game.selected_kingdom >= 0:
+		if not game.sim.kingdoms.has(game.selected_kingdom):
+			game.select_kingdom(-1)
+			return
+		_refresh_kingdom()
 
 
 # ---------------------------------------------------------------- helpers
@@ -364,6 +372,11 @@ func _build_city() -> void:
 		_link_row("Leader", _unit_name(leader_id), func() -> void: game.focus_unit(leader_id))
 	else:
 		_row("Leader", "", "none")
+	var kg: Kingdom = sim.kingdoms.get(c.kingdom, null)
+	if kg != null:
+		var kid := kg.id
+		_link_row("Kingdom", kg.name + ("  (capital)" if kg.capital == c.id else ""), func() -> void: game.select_kingdom(kid))
+		_row("Loyalty", "loyalty")
 	_row("Population", "pop")
 	_row("Territory", "terr")
 	_section("Stores  (hover for last month)")
@@ -407,6 +420,8 @@ func _refresh_city() -> void:
 		return
 	_set_text("pop", "%d people, housing for %d\n%d born, %d died" % [c.population(), c.housing, c.births, c.deaths])
 	_set_text("terr", "%d tiles" % c.territory.size())
+	var mood := "devoted" if c.loyalty >= 75 else ("content" if c.loyalty >= 45 else ("restless" if c.loyalty >= 25 else "rebellious"))
+	_set_text("loyalty", "%d  %s" % [roundi(c.loyalty), mood])
 	for res in City.RESOURCES:
 		var cap := c.food_capacity if res == "food" else float(Defs.building_globals.get("base_%s_capacity" % res, 200))
 		var made := roundi(float(c.last_produced[res]))
@@ -446,3 +461,92 @@ func _refresh_city() -> void:
 			if evs.size() >= 6:
 				break
 	_set_text("events", "\n".join(evs))
+
+
+# ---------------------------------------------------------------- kingdom
+
+func _build_kingdom() -> void:
+	var sim := game.sim
+	var k: Kingdom = sim.kingdoms[game.selected_kingdom]
+	var head := HBoxContainer.new()
+	var swatch := ColorRect.new()
+	swatch.color = Color(AssetForge.CITY_COLORS[k.color_index])
+	swatch.custom_minimum_size = Vector2(12, 40)
+	head.add_child(swatch)
+	var names := VBoxContainer.new()
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var title := UiTheme.label(k.name, "TitleLabel")
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	names.add_child(title)
+	var origin := "founded %s" % sim.date_string(k.founded_tick)
+	if sim.kingdoms.has(k.parent):
+		origin += ", broke from the %s" % (sim.kingdoms[k.parent] as Kingdom).name
+	var sub := UiTheme.label(origin, "MutedLabel")
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	names.add_child(sub)
+	head.add_child(names)
+	_body.add_child(head)
+	var ruler := k.ruler_id
+	if sim.units.is_alive_id(ruler):
+		_link_row("Ruler", _unit_name(ruler), func() -> void: game.focus_unit(ruler))
+	var cap: City = sim.cities.get(k.capital, null)
+	if cap != null:
+		var cid := cap.id
+		_link_row("Capital", cap.name, func() -> void: game.focus_city(cid))
+	_row("People", "kpop")
+	_row("War weariness", "kexh")
+	_section("Cities")
+	for cid2 in k.cities:
+		var c: City = sim.cities[cid2]
+		var id2 := c.id
+		_link_row("", "%s  (%d)" % [c.name, c.population()], func() -> void: game.focus_city(id2))
+	_section("Relations")
+	var rel := UiTheme.label("", "MutedLabel")
+	rel.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_body.add_child(rel)
+	_live["krel"] = rel
+	_section("Recent events")
+	var ev := UiTheme.label("", "MutedLabel")
+	ev.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_body.add_child(ev)
+	_live["kevents"] = ev
+	_refresh_kingdom()
+
+
+func _refresh_kingdom() -> void:
+	var sim := game.sim
+	var k: Kingdom = sim.kingdoms.get(game.selected_kingdom, null)
+	if k == null or not _live.has("kpop"):
+		return
+	_set_text("kpop", "%d in %d cities, %d can fight" % [sim.realm.population(k), k.cities.size(), sim.realm.strength(k)])
+	_set_text("kexh", "%d / 100" % roundi(k.exhaustion))
+	var lines := PackedStringArray()
+	for p: Dictionary in sim.realm.pairs.values():
+		var other := -1
+		if int(p["a"]) == k.id:
+			other = int(p["b"])
+		elif int(p["b"]) == k.id:
+			other = int(p["a"])
+		if other < 0 or not sim.kingdoms.has(other):
+			continue
+		var ok: Kingdom = sim.kingdoms[other]
+		var stance := "AT WAR" if p["war"] else ("hostile" if float(p["opinion"]) < -20 else ("friendly" if float(p["opinion"]) > 10 else "wary"))
+		lines.append("%s: %s (%+d)" % [ok.name, stance, roundi(float(p["opinion"]))])
+		var why := PackedStringArray()
+		for r: Array in p["reasons"]:
+			if absf(float(r[1])) >= 1.0:
+				why.append("%s %+d" % [r[0], roundi(float(r[1]))])
+		if why.size() > 0:
+			lines.append("   " + ", ".join(why))
+		if p["war"]:
+			var side := 0 if int(p["a"]) == k.id else 1
+			lines.append("   dead: %d ours / %d theirs" % [int((p["casualties"] as Array)[side]), int((p["casualties"] as Array)[1 - side])])
+	_set_text("krel", "\n".join(lines) if lines.size() > 0 else "No other kingdoms known.")
+	var evs := PackedStringArray()
+	for e: Dictionary in sim.history.recent(400):
+		var refs: Dictionary = e["refs"]
+		if int(refs.get("kingdom", -1)) == k.id or int(refs.get("enemy", -1)) == k.id or int(refs.get("from", -1)) == k.id:
+			evs.append("%s: %s" % [sim.date_string(int(e["tick"])), e["text"]])
+			if evs.size() >= 8:
+				break
+	_set_text("kevents", "\n".join(evs))

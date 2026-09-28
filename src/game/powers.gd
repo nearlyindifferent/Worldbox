@@ -8,6 +8,7 @@ const CATEGORIES := [
 	{"id": "terrain", "name": "Terrain", "icon": "raise", "powers": ["raise", "lower", "paint_grass", "paint_soil", "paint_sand", "paint_forest", "paint_hills", "paint_mountain", "paint_snow", "paint_desert", "paint_swamp", "paint_ash", "paint_mystic", "paint_shallow", "paint_ocean", "paint_deep"]},
 	{"id": "life", "name": "Life", "icon": "spawn_human", "powers": ["spawn_human", "spawn_sheep"]},
 	{"id": "divine", "name": "Divine", "icon": "smite", "powers": ["smite", "bless"]},
+	{"id": "diplomacy", "name": "Diplomacy", "icon": "crown", "powers": ["incite_war", "forge_peace", "spark_rebellion"]},
 ]
 
 const DEFS := {
@@ -32,6 +33,9 @@ const DEFS := {
 	"spawn_sheep": {"name": "Woolbacks", "desc": "Place grazing herd animals. They breed where grass is plentiful.", "brush": true, "repeat": 0.25},
 	"smite": {"name": "Smite", "desc": "Strike every creature under the brush with lightning.", "brush": true, "repeat": 0.3},
 	"bless": {"name": "Blessing", "desc": "Fully heal and feed every creature under the brush.", "brush": true, "repeat": 0.3},
+	"incite_war": {"name": "Incite War", "desc": "Click a city: its kingdom declares war on its nearest neighbouring kingdom.", "brush": false, "repeat": 0.0},
+	"forge_peace": {"name": "Forge Peace", "desc": "Click a city: its kingdom makes peace with all its enemies.", "brush": false, "repeat": 0.0},
+	"spark_rebellion": {"name": "Spark Rebellion", "desc": "Click a city of a larger kingdom: it rises up and breaks away.", "brush": false, "repeat": 0.0},
 }
 
 const HOTKEYS := {"inspect": KEY_Q, "raise": KEY_R, "lower": KEY_F, "spawn_human": KEY_H, "spawn_sheep": KEY_J, "smite": KEY_X}
@@ -51,6 +55,8 @@ static func effect_kind(power: String) -> String:
 		return "bless"
 	if power.begins_with("spawn"):
 		return "spawn"
+	if power in ["incite_war", "forge_peace", "spark_rebellion"]:
+		return "diplomacy"
 	return "terrain"
 
 

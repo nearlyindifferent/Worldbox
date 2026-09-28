@@ -19,6 +19,11 @@ const TOP_UP_HUNGER := 25.0
 const FARM_CARRY_LIMIT := 10.0
 const FARM_HOP_RADIUS := 6.0
 const MIN_HERD_TO_HUNT := 5
+const ENGAGE_RADIUS := 9.0
+const MELEE_RANGE := 1.4
+const FLEE_RADIUS := 5.0
+## Soldiers with id % GARRISON_EVERY == 0 defend their own town instead of marching.
+const GARRISON_EVERY := 3
 
 var sim: Simulation
 var _def: Defs.SpeciesDef
@@ -59,7 +64,12 @@ func update(s: int) -> void:
 		return
 	match u.state[s]:
 		UnitStore.State.MOVING:
-			pass  # movement is batched in MovementSystem.advance_all
+			# Marching soldiers break off to engage enemies they come across.
+			if u.task[s] == UnitStore.Task.MARCH:
+				var c: City = sim.cities.get(u.city[s], null)
+				if c != null and _nearest_enemy(s, c.kingdom, ENGAGE_RADIUS, false) >= 0:
+					sim.movement.stop(s)
+					_think(s)
 		UnitStore.State.WORKING:
 			u.task_timer[s] -= 1
 			if u.task_timer[s] <= 0:
@@ -128,6 +138,15 @@ func _think(s: int) -> void:
 		_wander_near(s, city.center, 6)
 		return
 
+	# War: civilians run home from enemy soldiers.
+	var soldier_job := _jobs[u.job[s]].id == "soldier"
+	if not soldier_job and city.kingdom >= 0 and sim.realm.is_at_war(city.kingdom):
+		if _nearest_enemy(s, city.kingdom, FLEE_RADIUS, true) >= 0:
+			var cx := city.center % w.width
+			var cy := city.center / w.width
+			if Vector2(cx - u.x[s], cy - u.y[s]).length() > 3.0 and _go(s, city.center, UnitStore.Task.FLEE):
+				return
+
 	# 4. Work
 	var job_id: String = _jobs[u.job[s]].id
 	match job_id:
@@ -148,6 +167,9 @@ func _think(s: int) -> void:
 				return
 		"hunter":
 			if _hunt(s):
+				return
+		"soldier":
+			if _soldier(s, city):
 				return
 	_wander_near(s, city.center, 7)
 
@@ -234,6 +256,77 @@ func _hunt(s: int) -> bool:
 	var ok := _go(s, int(u.y[best]) * sim.world.width + int(u.x[best]), UnitStore.Task.HUNT)
 	u.task_target[s] = best
 	return ok
+
+
+## Nearest living human of a kingdom at war with `kid` within r (soldiers only if asked).
+func _nearest_enemy(s: int, kid: int, r: float, soldiers_only: bool) -> int:
+	if kid < 0:
+		return -1
+	var foes := sim.realm.enemies_of(kid)
+	if foes.is_empty():
+		return -1
+	var u := sim.units
+	var soldier := Defs.job_by_id("soldier").index
+	var best := -1
+	var best_d := INF
+	for o in sim.spatial.query_radius(u, u.x[s], u.y[s], r, sim.human_species, 32):
+		if o == s or (soldiers_only and u.job[o] != soldier):
+			continue
+		if not foes.has(sim.realm.kingdom_of_unit(o)):
+			continue
+		var d := Vector2(u.x[o] - u.x[s], u.y[o] - u.y[s]).length_squared()
+		if d < best_d:
+			best_d = d
+			best = o
+	return best
+
+
+func _soldier(s: int, city: City) -> bool:
+	var u := sim.units
+	var kid := city.kingdom
+	if not sim.realm.is_at_war(kid):
+		return false
+	var e := _nearest_enemy(s, kid, ENGAGE_RADIUS, false)
+	if e >= 0:
+		var d := Vector2(u.x[e] - u.x[s], u.y[e] - u.y[s]).length()
+		if d <= MELEE_RANGE:
+			u.task[s] = UnitStore.Task.FIGHT
+			u.task_target[s] = e
+			_start_work(s, Defs.job_by_id("soldier").work_ticks)
+			return true
+		var et := int(u.y[e]) * sim.world.width + int(u.x[e])
+		return _go(s, et, UnitStore.Task.FIGHT, d > MovementSystem.DIRECT_RANGE)
+	if u.id[s] % GARRISON_EVERY == 0:
+		_wander_near(s, city.center, 5)
+		return true
+	for foe in sim.realm.enemies_of(kid):
+		var target: City = sim.cities.get(sim.realm.war_target(kid, foe), null)
+		if target != null:
+			return _go(s, target.center, UnitStore.Task.MARCH)
+	return false
+
+
+func _resolve_attack(s: int) -> void:
+	var u := sim.units
+	var e := u.task_target[s]
+	if e < 0 or e >= u.capacity or u.alive[e] == 0 or u.species[e] != sim.human_species:
+		return
+	var mine := sim.realm.kingdom_of_unit(s)
+	var theirs := sim.realm.kingdom_of_unit(e)
+	if not sim.realm.at_war(mine, theirs):
+		return
+	if Vector2(u.x[e] - u.x[s], u.y[e] - u.y[s]).length() > MELEE_RANGE + 0.3:
+		return
+	if u.has_flag(e, UnitStore.Flag.INVULNERABLE):
+		return
+	var dmg := float(Defs.job_by_id("soldier").raw.get("damage", 10.0)) * sim.rng.randf_range(0.7, 1.3)
+	u.health[e] -= dmg
+	var et := int(u.y[e]) * sim.world.width + int(u.x[e])
+	sim.push_fx("hit", et)
+	if u.health[e] <= 0.0:
+		sim.realm.record_battle_death(theirs, mine)
+		u.kills[s] += 1
+		sim.kill_unit(e, "battle")
 
 
 func _nomad(s: int, ti: int, adult: bool) -> void:
@@ -415,6 +508,8 @@ func _on_work_done(s: int) -> void:
 			var b: Building = sim.buildings.get(u.task_target[s], null)
 			if b != null and not b.complete:
 				sim.civ.add_build_progress(b, Defs.job_by_id("builder").work_ticks)
+		UnitStore.Task.FIGHT:
+			_resolve_attack(s)
 	u.task[s] = UnitStore.Task.NONE
 	u.next_think[s] = sim.tick + 1
 

@@ -27,6 +27,7 @@ var power: String = "inspect"
 var brush_radius: int = 3
 var selected_unit: int = -1
 var selected_city: int = -1
+var selected_kingdom: int = -1
 var sim_lagging := false
 var ticks_last_frame: int = 0
 var sim_ms_last_frame: float = 0.0
@@ -47,10 +48,20 @@ var _last_brush_tile := Vector2i(-1, -1)
 var _mouse_over_ui := false
 var _last_autosave_year := 0
 var pending_teleport_id: int = -1
+## Inspect-mode press: a tap selects, a drag pans (touch-friendly, WorldBox-like).
+var _press_pos := Vector2.ZERO
+var _press_active := false
+var _press_panned := false
+const DRAG_PAN_THRESHOLD := 10.0
 
 
 func _ready() -> void:
 	Defs.ensure_loaded()
+	if OS.has_feature("web"):
+		# High-density tablet screens: scale everything to the device pixel ratio.
+		get_window().content_scale_factor = clampf(roundf(DisplayServer.screen_get_scale()), 1.0, 3.0)
+		if str(boot.get("size", "")) == "medium":
+			boot["size"] = "small"
 	get_viewport().gui_embed_subwindows = true
 	# Outside the world reads as open sea rather than an engine-grey void.
 	RenderingServer.set_default_clear_color(Color("#0d1a3c"))
@@ -87,6 +98,8 @@ func new_world(p_seed: int, size_name: String, shape: String) -> void:
 
 
 func _install(new_sim: Simulation) -> void:
+	if sim != null and sim != new_sim:
+		sim.dispose()
 	sim = new_sim
 	terrain.bind(sim)
 	buildings_view.sim = sim
@@ -95,6 +108,7 @@ func _install(new_sim: Simulation) -> void:
 	camera.setup_world(terrain.world_pixel_size())
 	selected_unit = -1
 	selected_city = -1
+	selected_kingdom = -1
 	fx.selected_unit = -1
 	fx.selected_city = -1
 	pending_teleport_id = -1
@@ -114,6 +128,9 @@ var _autosave_task: int = -1
 func _start_autosave() -> void:
 	var prepared := saves.prepare(sim, saves.next_autosave_slot(), MapImage.render(sim, 128), {"autosave": true})
 	if not prepared["ok"]:
+		return
+	if OS.has_feature("web"):
+		saves.write_prepared(prepared)  # single-threaded web build
 		return
 	var mgr := saves
 	_autosave_task = WorkerThreadPool.add_task(func() -> void: mgr.write_prepared(prepared), false, "autosave")
@@ -195,6 +212,7 @@ func _process(delta: float) -> void:
 	units_view.alpha = alpha
 	fx.unit_alpha = alpha
 	_apply_held_brush(delta)
+	_drain_sim_fx()
 	var vr := camera.visible_tiles_rect()
 	terrain.set_zoom_hint(camera.current_zoom())
 	buildings_view.update_view(vr)
@@ -217,9 +235,19 @@ func set_brush_radius(r: int) -> void:
 	power_changed.emit()
 
 
+func select_kingdom(kid: int) -> void:
+	selected_kingdom = kid
+	selected_unit = -1
+	selected_city = -1
+	fx.selected_unit = -1
+	fx.selected_city = -1
+	selection_changed.emit()
+
+
 func select_unit(uid: int) -> void:
 	selected_unit = uid
 	selected_city = -1
+	selected_kingdom = -1
 	fx.selected_unit = uid
 	fx.selected_city = -1
 	selection_changed.emit()
@@ -228,6 +256,7 @@ func select_unit(uid: int) -> void:
 func select_city(cid: int) -> void:
 	selected_city = cid
 	selected_unit = -1
+	selected_kingdom = -1
 	fx.selected_city = cid
 	fx.selected_unit = -1
 	selection_changed.emit()
@@ -291,16 +320,34 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if camera.handle_input(event):
 		return
+	if camera.multi_touch_active():
+		_press_active = false
+		_end_stroke()
+		return
 	if event is InputEventMouseMotion:
 		var t := mouse_tile()
 		fx.brush_tile = t
 		ui.on_hover_tile(t)
+		if _press_active:
+			var mm := event as InputEventMouseMotion
+			if _press_panned or mm.position.distance_to(_press_pos) > DRAG_PAN_THRESHOLD:
+				_press_panned = true
+				camera.pan_screen(mm.relative)
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				_on_left_press()
+				if power == "inspect" and pending_teleport_id < 0:
+					_press_active = true
+					_press_panned = false
+					_press_pos = mb.position
+				else:
+					_on_left_press()
 			else:
+				if _press_active:
+					_press_active = false
+					if not _press_panned:
+						_inspect_at(mouse_tile())
 				_end_stroke()
 			get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -316,6 +363,10 @@ func _on_left_press() -> void:
 	if power == "inspect":
 		_inspect_at(t)
 		return
+	if Powers.effect_kind(power) == "diplomacy":
+		var r := sim.apply_command({"op": "brush", "power": power, "x": t.x, "y": t.y, "radius": 0})
+		toast.emit(str(r["msg"]), r["ok"])
+		return
 	sim.apply_command({"op": "stroke_begin"})
 	_stroke_active = true
 	_stroke_timer = 0.0
@@ -327,6 +378,20 @@ func _end_stroke() -> void:
 		sim.apply_command({"op": "stroke_end"})
 		_stroke_active = false
 		_last_brush_tile = Vector2i(-1, -1)
+
+
+## Turns simulation presentation events (battle hits, conquests) into world effects.
+func _drain_sim_fx() -> void:
+	if sim.fx_events.is_empty():
+		return
+	var w := sim.world.width
+	var vr := camera.visible_tiles_rect().grow(4)
+	for e: Dictionary in sim.fx_events:
+		var t := int(e["tile"])
+		var tile := Vector2i(t % w, t / w)
+		if vr.has_point(Vector2(tile)):
+			fx.add_effect(str(e["kind"]), tile, 1)
+	sim.fx_events.clear()
 
 
 func _apply_held_brush(delta: float) -> void:

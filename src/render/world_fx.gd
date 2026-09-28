@@ -25,7 +25,7 @@ func add_effect(kind: String, tile: Vector2i, radius: int = 1) -> void:
 func _process(delta: float) -> void:
 	for e in _effects:
 		e["t"] = float(e["t"]) + delta
-	_effects = _effects.filter(func(e: Dictionary) -> bool: return float(e["t"]) < 0.7)
+	_effects = _effects.filter(func(e: Dictionary) -> bool: return float(e["t"]) < (1.6 if e["kind"] == "conquest" else 0.7))
 	queue_redraw()
 
 
@@ -127,6 +127,16 @@ func _draw_effect(e: Dictionary, line: float) -> void:
 				var ang := k * TAU / 10.0 + t * 2.0
 				var p := c + Vector2(cos(ang), sin(ang)) * (4.0 + r * t)
 				draw_rect(Rect2(p - Vector2(1, 1) - Vector2(0, t * 10.0), Vector2(2, 2)), Color(col, 1.0 - t))
+		"hit":
+			var a2 := 1.0 - t
+			for k in 5:
+				var ang := k * TAU / 5.0 + float(tile.x * 3 + tile.y)
+				var p := c + Vector2(cos(ang), sin(ang)) * (1.0 + t * 7.0) - Vector2(0, 4)
+				draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.35 + 0.5 * float(k % 2), 0.25, a2))
+		"conquest":
+			var tt: float = e["t"] / 1.6
+			draw_arc(c, 6.0 + tt * 40.0, 0, TAU, 40, Color(1.0, 0.85, 0.3, 1.0 - tt), 3.0)
+			draw_arc(c, 3.0 + tt * 26.0, 0, TAU, 40, Color(1.0, 1.0, 1.0, 0.8 * (1.0 - tt)), 2.0)
 		"terrain":
 			for k in 8:
 				var ang := k * TAU / 8.0

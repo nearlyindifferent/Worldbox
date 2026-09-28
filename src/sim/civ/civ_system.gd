@@ -31,11 +31,14 @@ const SETTLER_MAX_DISTANCE := 60
 const MAX_FOUNDERS := 12
 ## Monthly decay of goods stored above capacity (spoilage / overflow).
 const OVERFLOW_DECAY := 0.3
+## Share of adults drafted as soldiers while their kingdom is at war.
+const SOLDIER_SHARE := 0.3
 
 var sim: Simulation
 var _blocked_logged: Dictionary = {}  ## building id -> true (log de-duplication only)
 var _last_settlers: Dictionary = {}   ## city id -> tick settlers last left (saved)
 var settler_attempts: Dictionary = {}  ## settler unit id -> founding attempts at the destination (saved)
+var settler_origin: Dictionary = {}    ## settler unit id -> kingdom id they set out from (saved)
 var _human: Defs.SpeciesDef
 var _meal_food: float
 
@@ -164,6 +167,8 @@ func scout_site(ti: int) -> int:
 func found_city(s: int, ti: int, reasons: Array) -> City:
 	var u := sim.units
 	var w := sim.world
+	# Read before join_city() clears the settler bookkeeping.
+	var origin: Kingdom = sim.kingdoms.get(int(settler_origin.get(u.id[s], -1)), null)
 	var c := City.new()
 	c.id = sim.next_city_id
 	sim.next_city_id += 1
@@ -195,7 +200,12 @@ func found_city(s: int, ti: int, reasons: Array) -> City:
 			join_city(o, c)
 			joined += 1
 	_recompute_capacity(c)
-	sim.history.record(sim.tick, HistoryLog.Kind.CITY_FOUNDED, "%s was founded by %s." % [c.name, u.name[s]], {"city": c.id, "unit": u.id[s]}, c.center)
+	# Colonies stay loyal to the kingdom their settlers came from.
+	if origin != null:
+		sim.realm.add_city(origin, c)
+	else:
+		sim.realm.create_for_city(c, -1, "founded by %s's band" % u.name[s])
+	sim.history.record(sim.tick, HistoryLog.Kind.CITY_FOUNDED, "%s was founded by %s%s." % [c.name, u.name[s], (" for the " + origin.name) if origin != null else ""], {"city": c.id, "unit": u.id[s], "kingdom": c.kingdom}, c.center)
 	sim.decisions.record(sim.tick, "settlement", u.name[s], "founded %s" % c.name, reasons, {"city": c.id})
 	return c
 
@@ -225,6 +235,7 @@ func join_city(s: int, c: City) -> void:
 	c.members.append(u.id[s])
 	u.set_flag(s, UnitStore.Flag.SETTLER, false)
 	settler_attempts.erase(u.id[s])
+	settler_origin.erase(u.id[s])
 	# Dependent cityless children follow their parent into the city.
 	for cid in u.children.get(u.id[s], PackedInt64Array()):
 		var cs := u.slot_for(cid)
@@ -314,13 +325,15 @@ func compute_job_targets(c: City, adults: int) -> PackedInt32Array:
 	var food_workers := maxi(1, ceili(adults * food_share))
 	want["farmer"] = ceili(food_workers * 0.6) if pop >= 3 else 0
 	want["gatherer"] = food_workers - int(want["farmer"])
+	# At war, a share of adults takes up arms (after the minimum food workforce).
+	want["soldier"] = ceili(adults * SOLDIER_SHARE) if c.kingdom >= 0 and sim.realm.is_at_war(c.kingdom) and adults >= 3 else 0
 	want["woodcutter"] = maxi(1, ceili(adults * 0.25)) if wood < wood_need + 12.0 else (1 if adults >= 4 else 0)
 	want["builder"] = mini(sites_ready * 2, maxi(1, ceili(adults * 0.25)))
 	want["miner"] = maxi(1, ceili(adults * 0.1)) if stone < stone_need else (1 if adults >= 8 and stone < 40.0 else 0)
 	# Hunting is a hardship measure: only when stores cover < 3 months of need.
 	want["hunter"] = 1 if adults >= 6 and months_of_food < 3.0 else 0
 	var left := adults
-	for jid in ["farmer", "gatherer", "woodcutter", "builder", "miner", "hunter"]:
+	for jid in ["farmer", "gatherer", "soldier", "woodcutter", "builder", "miner", "hunter"]:
 		var n := mini(int(want[jid]), left)
 		t[Defs.job_by_id(jid).index] = n
 		left -= n
@@ -863,6 +876,7 @@ func _maybe_send_settlers(c: City) -> void:
 		u.task_target[s] = target
 		u.set_flag(s, UnitStore.Flag.SETTLER, true)
 		settler_attempts[u.id[s]] = 0
+		settler_origin[u.id[s]] = c.kingdom
 		u.next_think[s] = sim.tick
 		sim.movement.stop(s)
 		names.append(u.name[s])
@@ -911,6 +925,7 @@ func abandon_city(c: City, reason: String) -> void:
 	c.territory = PackedInt32Array()
 	c.fields = PackedInt32Array()
 	c.alive = false
+	sim.realm.detach_city(c)
 	# Remove immediately so nothing can join or reference the dead city later this tick.
 	sim.cities.erase(c.id)
 	sim.history.record(sim.tick, HistoryLog.Kind.CITY_ABANDONED, "%s was abandoned: %s." % [c.name, reason], {"city": c.id}, c.center)
@@ -926,10 +941,11 @@ func on_tile_changed(i: int) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"last_settlers": _last_settlers.duplicate(), "settler_attempts": settler_attempts.duplicate(), "blocked_logged": _blocked_logged.duplicate()}
+	return {"last_settlers": _last_settlers.duplicate(), "settler_attempts": settler_attempts.duplicate(), "settler_origin": settler_origin.duplicate(), "blocked_logged": _blocked_logged.duplicate()}
 
 
 func from_dict(d: Dictionary) -> void:
 	_last_settlers = d.get("last_settlers", {})
 	settler_attempts = d.get("settler_attempts", {})
+	settler_origin = d.get("settler_origin", {})
 	_blocked_logged = d.get("blocked_logged", {})

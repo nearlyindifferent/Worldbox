@@ -30,7 +30,18 @@ func _process(_delta: float) -> void:
 		if b == null:
 			b = _make(c)
 			_pool[c.id] = b
+		var k: Kingdom = sim.kingdoms.get(c.kingdom, null)
+		var capital := k != null and k.capital == c.id
+		var war := k != null and sim.realm.is_at_war(k.id)
 		b.text = "%s  %d" % [c.name, c.population()]
+		b.icon = UiTheme.icon("incite_war" if war else ("crown" if capital else "city"))
+		if b.get_meta("style", -1) != int(war) * 2 + int(capital) or b.get_meta("color", -1) != c.color_index:
+			b.set_meta("style", int(war) * 2 + int(capital))
+			b.set_meta("color", c.color_index)
+			var col := Color(AssetForge.CITY_COLORS[c.color_index])
+			var border := Color("#e0503c") if war else col
+			b.add_theme_stylebox_override("normal", UiTheme.box(Color("#1c1512", 0.88), border, Color(0, 0, 0, 0), 3, 3 if war else 2))
+			b.add_theme_stylebox_override("hover", UiTheme.box(Color("#2c221d", 0.95), border.lightened(0.3), Color(0, 0, 0, 0), 3, 3 if war else 2))
 		# Anchor above the town hall roof (hall top-left is center - (1,1)).
 		var world_pos := (Vector2(c.center % sim.world.width, c.center / sim.world.width) + Vector2(0.0, -2.2)) * AssetForge.TILE
 		var sp := xf * world_pos

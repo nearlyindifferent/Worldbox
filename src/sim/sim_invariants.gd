@@ -90,6 +90,26 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 		if b.progress < 0.0:
 			errs.append("building %d negative progress" % b.id)
 
+	for c: City in sim.cities.values():
+		var k: Kingdom = sim.kingdoms.get(c.kingdom, null)
+		if k == null:
+			errs.append("city %s belongs to missing kingdom %d" % [c.name, c.kingdom])
+		elif not k.cities.has(c.id):
+			errs.append("city %s not listed by its kingdom" % c.name)
+	for k: Kingdom in sim.kingdoms.values():
+		if k.cities.is_empty():
+			errs.append("kingdom %s has no cities" % k.name)
+		if not k.cities.has(k.capital):
+			errs.append("kingdom %s capital %d is not one of its cities" % [k.name, k.capital])
+		for cid in k.cities:
+			var c: City = sim.cities.get(cid, null)
+			if c == null or c.kingdom != k.id:
+				errs.append("kingdom %s lists foreign/missing city %d" % [k.name, cid])
+				break
+	for p: Dictionary in sim.realm.pairs.values():
+		if not sim.kingdoms.has(int(p["a"])) or not sim.kingdoms.has(int(p["b"])):
+			errs.append("diplomacy record for missing kingdom")
+			break
 	var owned_total := 0
 	for c: City in sim.cities.values():
 		if c.alive:

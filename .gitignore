@@ -1,7 +1,7 @@
-.godot/
 *.import
+*.tmp
+.DS_Store
+.godot/
 /build/
 /export/
-.DS_Store
-*.tmp
 /tools/out/

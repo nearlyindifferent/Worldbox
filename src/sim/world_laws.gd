@@ -11,6 +11,9 @@ const DEFAULTS := {
 	"forest_spread": true,
 	"settlement_founding": true,
 	"construction": true,
+	"diplomacy": true,
+	"wars": true,
+	"rebellions": true,
 }
 const DESCRIPTIONS := {
 	"hunger": "Creatures grow hungry and starve without food.",
@@ -21,6 +24,9 @@ const DESCRIPTIONS := {
 	"forest_spread": "Forests slowly reclaim nearby open land.",
 	"settlement_founding": "Wanderers may found new settlements.",
 	"construction": "Cities plan and build new structures.",
+	"diplomacy": "Kingdoms form opinions of each other.",
+	"wars": "Kingdoms may declare war.",
+	"rebellions": "Disloyal cities may rise up and break away.",
 }
 
 var values: Dictionary = DEFAULTS.duplicate()

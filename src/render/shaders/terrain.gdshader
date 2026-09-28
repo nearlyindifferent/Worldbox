@@ -2,7 +2,7 @@ shader_type canvas_item;
 // Terrain + territory in one pass. Each fragment finds its tile, samples the
 // procedural tile atlas, then layers shading, shoreline, borders and overlays.
 // data_tex:  R biome index | G variant(2) veg band(2)<<2 wood band(2)<<4 | B hillshade
-// owner_tex: R,G owner city id (lo, hi byte) | B color index + 1 (0 = unowned)
+// owner_tex: R,G owner city id (lo, hi byte) | B color index + 1 (0 = unowned) | A kingdom hash
 
 uniform sampler2D data_tex : filter_nearest;
 uniform sampler2D owner_tex : filter_nearest;
@@ -34,6 +34,11 @@ bool is_water(int b) { return b <= max_water_index; }
 int owner_id(ivec2 p) {
 	ivec4 o = texel_i(owner_tex, p);
 	return o.b == 0 ? -1 : o.r + o.g * 256;
+}
+
+int realm_id(ivec2 p) {
+	ivec4 o = texel_i(owner_tex, p);
+	return o.b == 0 ? -1 : o.a;
 }
 
 float hash12(vec2 p) {
@@ -118,13 +123,20 @@ void fragment() {
 			c.rgb = mix(c.rgb, cc, territory_fill);
 			// Border thickness: one art pixel, never thinner than ~1.5 screen pixels.
 			float thick = max(1.0 / TILE_PX, 1.5 * max(tiles_per_screen_px.x, tiles_per_screen_px.y));
-			bool edge = false;
-			if (f.x < thick && owner_id(t + ivec2(-1, 0)) != me) edge = true;
-			if (f.x > 1.0 - thick && owner_id(t + ivec2(1, 0)) != me) edge = true;
-			if (f.y < thick && owner_id(t + ivec2(0, -1)) != me) edge = true;
-			if (f.y > 1.0 - thick && owner_id(t + ivec2(0, 1)) != me) edge = true;
-			if (edge) {
+			// Kingdom frontiers are solid; borders between towns of one kingdom are faint.
+			int realm = realm_id(t);
+			int edge = 0;
+			ivec2 dirs[4] = ivec2[4](ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+			bool near_edge[4] = bool[4](f.x < thick, f.x > 1.0 - thick, f.y < thick, f.y > 1.0 - thick);
+			for (int k = 0; k < 4; k++) {
+				if (!near_edge[k]) continue;
+				ivec2 q = t + dirs[k];
+				if (owner_id(q) != me) edge = max(edge, realm_id(q) != realm ? 2 : 1);
+			}
+			if (edge == 2) {
 				c.rgb = mix(cc * 1.15, vec3(1.0), 0.12);
+			} else if (edge == 1) {
+				c.rgb = mix(c.rgb, cc * 1.1, 0.45);
 			}
 		}
 	}

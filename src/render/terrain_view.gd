@@ -131,10 +131,13 @@ func _encode_chunk(c: int) -> void:
 				_owner[k + 1] = 0
 				_owner[k + 2] = 0
 			else:
+				var oc: City = sim.cities[o]
 				_owner[k] = o & 255
 				_owner[k + 1] = (o >> 8) & 255
-				_owner[k + 2] = (sim.cities[o] as City).color_index + 1
-			_owner[k + 3] = 255
+				_owner[k + 2] = oc.color_index + 1
+				_owner[k + 3] = (oc.kingdom * 37) & 255
+				continue
+			_owner[k + 3] = 0
 
 
 func set_territory_visible(on: bool) -> void:

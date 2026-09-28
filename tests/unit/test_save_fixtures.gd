@@ -56,6 +56,22 @@ func test_schema1_golden_save_migrates_and_runs() -> void:
 	_cleanup(m)
 
 
+func test_schema2_golden_save_migrates_to_kingdoms() -> void:
+	var m := _mgr()
+	_cleanup(m)
+	_install_fixture(m, "schema2_seed5_96.sav", "v2")
+	var r := m.load_slot("v2")
+	assert_true(r["ok"], "schema-2 save loads: %s" % r.get("msg", ""))
+	if not r["ok"]:
+		return
+	var sim: Simulation = r["sim"]
+	assert_eq(sim.kingdoms.size(), sim.cities.size(), "each old city became a kingdom")
+	assert_no_violations(sim, "v2->v3 migrated world")
+	run_ticks(sim, 400)
+	assert_no_violations(sim, "v2->v3 migrated world after 400 ticks")
+	_cleanup(m)
+
+
 func test_current_schema_golden_hash_is_stable() -> void:
 	# Fails if to_dict()/from_dict() change without a SAVE_SCHEMA bump + new fixture.
 	var info: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/schema%d_seed5_96.json" % Simulation.SAVE_SCHEMA))

@@ -8,7 +8,7 @@ extends RefCounted
 ##      (tests/unit/test_save_fixtures.gd fails if to_dict changes without a bump).
 
 ## from_schema -> method name that upgrades a dict from that schema to from_schema+1
-const STEPS := {1: "_v1_to_v2"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3"}
 
 
 static func migrate(d: Dictionary) -> Dictionary:
@@ -38,4 +38,29 @@ static func _v1_to_v2(d: Dictionary) -> Dictionary:
 	for k: String in old:
 		causes[k if k.contains(": ") else "unknown: " + k] = old[k]
 	d["deaths_by_cause"] = causes
+	return d
+
+
+## Schema 3 added kingdoms and diplomacy: every existing city becomes the capital of
+## its own kingdom (as if each had been founded by an independent band).
+static func _v2_to_v3(d: Dictionary) -> Dictionary:
+	var kingdoms: Array = []
+	var next_id := 1
+	var forms := ["Kingdom of %s"]
+	for c: Dictionary in d["cities"]:
+		var kid := next_id
+		next_id += 1
+		c["kingdom"] = kid
+		c["loyalty"] = 100.0
+		kingdoms.append({"id": kid, "name": forms[0] % str(c.get("name", "?")), "species": int(c.get("species", 0)),
+			"color_index": int(c.get("color_index", 0)), "capital": int(c["id"]), "ruler_id": int(c.get("leader_id", -1)),
+			"parent": -1, "founded_tick": int(c.get("founded_tick", 0)), "cities": PackedInt32Array([int(c["id"])]),
+			"exhaustion": 0.0, "alive": true})
+	d["kingdoms"] = kingdoms
+	d["next_kingdom_id"] = next_id
+	d["realm"] = {"pairs": {}}
+	var cs: Dictionary = d.get("civ_state", {})
+	if not cs.has("settler_origin"):
+		cs["settler_origin"] = {}
+	d["civ_state"] = cs
 	return d
