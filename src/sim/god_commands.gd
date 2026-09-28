@@ -147,8 +147,12 @@ static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 			var rc: City = sim.cities.get(int(cmd["city"]), null)
 			if rc == null:
 				return _fail("No such city")
+			var realm: Kingdom = sim.kingdoms.get(rc.kingdom, null)
+			if realm != null and realm.cities.size() < 2:
+				# A realm of one town cannot split: its people overthrow their ruler instead.
+				return _coup(sim, rc)
 			var nk := sim.realm.rebel(rc, [["cause", "stirred up by the gods"]])
-			return _ok("%s rebelled" % rc.name, {"kingdom": nk.id}) if nk != null else _fail("Only a city of a multi-city kingdom can rebel")
+			return _ok("%s rebelled" % rc.name, {"kingdom": nk.id}) if nk != null else _fail("This town cannot rebel")
 		"set_leader":
 			var c: City = sim.cities.get(int(cmd["city"]), null)
 			var s := _slot(sim, cmd)
@@ -251,6 +255,32 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 				n += 1
 			return _ok("", {"blessed": n})
 	return _fail("Unknown power '%s'" % power)
+
+
+## Replaces a town's leader with the most ambitious other adult.
+static func _coup(sim: Simulation, c: City) -> Dictionary:
+	var u := sim.units
+	var best := -1
+	var best_score := -1.0
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s < 0 or mid == c.leader_id or u.age_years(s, sim.tick) < 16.0:
+			continue
+		var score := 1.0 + (5.0 if Traits.has(u.traits[s], Traits.WARLIKE) else 0.0) + (3.0 if Traits.has(u.traits[s], Traits.BRAVE) else 0.0) + float(u.id[s] % 7) * 0.1
+		if score > best_score:
+			best_score = score
+			best = s
+	if best < 0:
+		return _fail("No one in %s is ready to seize power" % c.name)
+	var old := sim.units.slot_for(c.leader_id)
+	var old_name := sim.units.name[old] if old >= 0 else "the old leader"
+	c.leader_id = u.id[best]
+	var realm: Kingdom = sim.kingdoms.get(c.kingdom, null)
+	if realm != null and realm.capital == c.id:
+		realm.ruler_id = c.leader_id
+	c.loyalty = maxf(0.0, c.loyalty - 20.0)
+	sim.history.record(sim.tick, HistoryLog.Kind.REBELLION, "%s overthrew %s and seized %s." % [u.name[best], old_name, c.name], {"city": c.id, "unit": c.leader_id}, c.center)
+	return _ok("%s seized power in %s" % [u.name[best], c.name])
 
 
 static func _slot(sim: Simulation, cmd: Dictionary) -> int:

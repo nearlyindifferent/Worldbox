@@ -78,6 +78,14 @@ static func _add(mask: int, t: int) -> int:
 	return mask | (1 << t)
 
 
+## A ruler's epithet from their most notable character trait ("" when none).
+static func epithet(mask: int) -> String:
+	for t: int in [WISE, JUST, WARLIKE, GREEDY, BRAVE, STRONG]:
+		if has(mask, t):
+			return "the " + str(INFO[t]["name"])
+	return ""
+
+
 static func names(mask: int) -> PackedStringArray:
 	var out := PackedStringArray()
 	for t in INFO.size():

@@ -43,7 +43,7 @@ const DEFS := {
 	"plague": {"name": "Plague", "desc": "Infect creatures under the brush. Sickness spreads to neighbours; survivors become immune.", "brush": true, "repeat": 0.4},
 	"incite_war": {"name": "Incite War", "desc": "Click a city: its kingdom declares war on its nearest neighbouring kingdom.", "brush": false, "repeat": 0.0},
 	"forge_peace": {"name": "Forge Peace", "desc": "Click a city: its kingdom makes peace with all its enemies.", "brush": false, "repeat": 0.0},
-	"spark_rebellion": {"name": "Spark Rebellion", "desc": "Click a city of a larger kingdom: it rises up and breaks away.", "brush": false, "repeat": 0.0},
+	"spark_rebellion": {"name": "Spark Rebellion", "desc": "Tap a town: it breaks away from its kingdom, or, if it stands alone, its people overthrow their ruler.", "brush": false, "repeat": 0.0},
 }
 
 const HOTKEYS := {"inspect": KEY_Q, "raise": KEY_R, "lower": KEY_F, "spawn_human": KEY_H, "spawn_sheep": KEY_J, "smite": KEY_X}

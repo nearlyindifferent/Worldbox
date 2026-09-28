@@ -140,6 +140,10 @@ func _link(text: String, cb: Callable) -> Button:
 	b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.clip_text = true
+	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.custom_minimum_size = Vector2(60, 0)
 	b.pressed.connect(cb)
 	return b
 
@@ -395,7 +399,7 @@ func _build_city() -> void:
 		_row("Loyalty", "loyalty")
 	_row("Population", "pop")
 	_row("Territory", "terr")
-	_section("Stores  (hover for last month)")
+	_section("Stores  (last month: made / used)")
 	for res in City.RESOURCES:
 		var h := HBoxContainer.new()
 		h.add_child(UiTheme.icon_rect(res, 24))
@@ -444,7 +448,7 @@ func _refresh_city() -> void:
 		var used := roundi(float(c.last_consumed[res]))
 		var net := made - used
 		var trend := "steady" if net == 0 else ("%+d/mo" % net)
-		_set_text("res_" + res, "%d / %d   %s" % [roundi(float(c.storage[res])), int(cap), trend])
+		_set_text("res_" + res, "%d / %d   %s   (+%d / -%d)" % [roundi(float(c.storage[res])), int(cap), trend, made, used])
 		(_live["res_" + res] as Label).tooltip_text = "Last month: +%d made, -%d used" % [made, used]
 		(_live["res_" + res] as Label).mouse_filter = Control.MOUSE_FILTER_PASS
 	var counts := {}

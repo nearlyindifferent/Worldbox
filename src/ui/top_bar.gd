@@ -10,6 +10,10 @@ var _cities := Label.new()
 var _animals := Label.new()
 var _lag := Label.new()
 var _timer := 0.0
+var _title: Label
+var _title_sep: VSeparator
+var _animal_icon: Control
+var _narrow := false
 
 
 func _ready() -> void:
@@ -18,9 +22,10 @@ func _ready() -> void:
 	row.add_theme_constant_override("separation", 10)
 	add_child(row)
 
-	var title := UiTheme.label("HEARTHMERE", "GoldLabel")
-	row.add_child(title)
-	row.add_child(_vsep())
+	_title = UiTheme.label("HEARTHMERE", "GoldLabel")
+	row.add_child(_title)
+	_title_sep = _vsep()
+	row.add_child(_title_sep)
 	_date.custom_minimum_size = Vector2(230, 0)
 	row.add_child(UiTheme.icon_rect("world", 24))
 	row.add_child(_date)
@@ -51,7 +56,8 @@ func _ready() -> void:
 	row.add_child(_pop)
 	row.add_child(UiTheme.icon_rect("city", 24))
 	row.add_child(_cities)
-	row.add_child(UiTheme.icon_rect("spawn_sheep", 24))
+	_animal_icon = UiTheme.icon_rect("spawn_sheep", 24)
+	row.add_child(_animal_icon)
 	row.add_child(_animals)
 	row.add_child(_vsep())
 	for spec: Array in [["history", "Chronicle  [T]", func() -> void: game.ui.toggle_history()],
@@ -68,6 +74,20 @@ func _ready() -> void:
 		row.add_child(b)
 	game.speed_changed.connect(_sync_speed)
 	_sync_speed()
+	get_viewport().size_changed.connect(_fit)
+	_fit()
+
+
+## Drops the title and animal count and shortens the date on narrow screens.
+func _fit() -> void:
+	var w := get_viewport_rect().size.x
+	_narrow = w < 1000.0
+	_title.visible = w >= 1150.0
+	_title_sep.visible = _title.visible
+	_animal_icon.visible = not _narrow
+	_animals.visible = not _narrow
+	_date.custom_minimum_size = Vector2(130 if _narrow else 230, 0)
+	_timer = 1.0
 
 
 func _vsep() -> VSeparator:
@@ -86,7 +106,8 @@ func _process(delta: float) -> void:
 		return
 	_timer = 0.0
 	var sim := game.sim
-	_date.text = sim.date_string()
+	@warning_ignore("integer_division")
+	_date.text = ("Y%d  M%d" % [sim.year(), sim.month()]) if _narrow else sim.date_string()
 	var humans := sim.count_species(sim.human_species)
 	_pop.text = str(humans)
 	_cities.text = str(sim.cities.size())

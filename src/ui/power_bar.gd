@@ -1,12 +1,20 @@
 class_name PowerBar
 extends PanelContainer
-## Bottom god-power toolbar in one compact row:
+## Bottom god-power toolbar. Wide screens use one row:
 ## [category tabs] | [powers of the browsed category] ... [current tool] [brush - n +] [undo]
+## Narrow (portrait tablet) screens move the powers onto a second row. Powers are laid
+## out in a grid of at most two rows so large categories never run off-screen.
 ## Browsing a category never changes the selected power; exactly one tab is active.
 
 var game: Game
 var _tabs := HBoxContainer.new()
-var _powers := HBoxContainer.new()
+var _powers := GridContainer.new()
+var _stack := VBoxContainer.new()
+var _row := HBoxContainer.new()
+var _inset := PanelContainer.new()
+var _right := VBoxContainer.new()
+const NARROW := 1000.0
+const POWER_BTN := 46.0
 var _tab_buttons := {}
 var _power_buttons := {}
 var _category: String = "inspect"
@@ -19,9 +27,11 @@ var _brush_box := HBoxContainer.new()
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE)
 	grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var row := HBoxContainer.new()
+	var row := _row
 	row.add_theme_constant_override("separation", 8)
-	add_child(row)
+	_stack.add_theme_constant_override("separation", 4)
+	add_child(_stack)
+	_stack.add_child(row)
 	var tab_col := VBoxContainer.new()
 	tab_col.add_theme_constant_override("separation", 2)
 	row.add_child(tab_col)
@@ -39,31 +49,32 @@ func _ready() -> void:
 		b.icon = UiTheme.icon(c["icon"])
 		b.toggle_mode = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(118, 0)
+		b.custom_minimum_size = Vector2(110, 0)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.tooltip_text = "Show %s powers" % str(c["name"]).to_lower()
 		b.pressed.connect(show_category.bind(c["id"]))
-		(tabs_a if k < 2 else tabs_b).add_child(b)
+		(tabs_a if k < 3 else tabs_b).add_child(b)
 		_tab_buttons[c["id"]] = b
 		k += 1
 	row.add_child(VSeparator.new())
-	var inset := PanelContainer.new()
+	var inset := _inset
 	inset.theme_type_variation = "Inset"
 	inset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_powers.add_theme_constant_override("separation", 3)
+	_powers.add_theme_constant_override("h_separation", 3)
+	_powers.add_theme_constant_override("v_separation", 3)
 	inset.add_child(_powers)
 	row.add_child(inset)
-	var right := VBoxContainer.new()
+	var right := _right
 	right.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(right)
 	_current.theme_type_variation = "GoldLabel"
 	_current.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_current.custom_minimum_size = Vector2(190, 0)
+	_current.custom_minimum_size = Vector2(240, 0)
 	right.add_child(_current)
 	# The selected power's description, always visible (touch screens have no hover).
 	_desc.theme_type_variation = "MutedLabel"
 	_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_desc.custom_minimum_size = Vector2(280, 0)
+	_desc.custom_minimum_size = Vector2(240, 0)
 	_desc.max_lines_visible = 2
 	_desc.add_theme_font_size_override("font_size", 14)
 	_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -79,6 +90,21 @@ func _ready() -> void:
 	right.add_child(_brush_box)
 	game.power_changed.connect(_on_power_changed)
 	show_category("inspect")
+	get_viewport().size_changed.connect(_fit)
+	_fit()
+
+
+## Portrait / narrow screens: powers get their own row under the tabs.
+func _fit() -> void:
+	var narrow := get_viewport_rect().size.x < NARROW
+	var parent := _inset.get_parent()
+	if narrow and parent == _row:
+		_row.remove_child(_inset)
+		_stack.add_child(_inset)
+	elif not narrow and parent == _stack:
+		_stack.remove_child(_inset)
+		_row.add_child(_inset)
+		_row.move_child(_inset, _row.get_child_count() - 2)
 
 
 func _tool_button(icon_id: String, tip: String, cb: Callable) -> Button:
@@ -103,13 +129,15 @@ func show_category(cat: String) -> void:
 	for c: Dictionary in Powers.CATEGORIES:
 		if c["id"] != cat:
 			continue
+		var n: int = (c["powers"] as Array).size()
+		_powers.columns = n if n <= 8 else ceili(n / 2.0)
 		for pid: String in c["powers"]:
 			var d: Dictionary = Powers.DEFS[pid]
 			var b := Button.new()
 			b.theme_type_variation = "ToolButton"
 			b.icon = UiTheme.icon(pid)
 			b.expand_icon = true
-			b.custom_minimum_size = Vector2(52, 52)
+			b.custom_minimum_size = Vector2(POWER_BTN, POWER_BTN)
 			b.toggle_mode = true
 			b.focus_mode = Control.FOCUS_NONE
 			var hk := ""

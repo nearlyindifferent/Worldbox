@@ -259,8 +259,9 @@ func _update_ruler(k: Kingdom) -> void:
 		return
 	if cap.leader_id != k.ruler_id and sim.units.is_alive_id(cap.leader_id):
 		k.ruler_id = cap.leader_id
+		# The capital's succession entry already names the new ruler.
 		var s := sim.units.slot_for(k.ruler_id)
-		sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s now rules the %s." % [sim.units.name[s], k.name], {"kingdom": k.id, "unit": k.ruler_id}, cap.center)
+		sim.decisions.record(sim.tick, "succession", k.name, "is now ruled by %s" % sim.units.name[s], [["capital", cap.name]], {"kingdom": k.id})
 
 
 func _update_loyalty(k: Kingdom) -> void:

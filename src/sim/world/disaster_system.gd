@@ -26,15 +26,19 @@ const LAVA_DAMAGE := 40.0
 const LAVA_IGNITE_CHANCE := 0.3
 const QUAKE_TICKS := 60
 const QUAKE_COLLAPSE_CHANCE := 0.35
-const PLAGUE_TICKS := 120             ## how long an infection lasts
+const PLAGUE_TICKS := 150             ## how long an infection lasts
 const PLAGUE_SPREAD_EVERY := 6
 const PLAGUE_SPREAD_RADIUS := 1.6
-const PLAGUE_SPREAD_CHANCE := 0.09
+const PLAGUE_SPREAD_CHANCE := 0.12
 const PLAGUE_DAMAGE := 0.7            ## base health per tick, scaled by a per-person frailty
-const NATURAL_FIRE_CHANCE := 0.035    ## per month, world-wide, scaled by world size
-const NATURAL_PLAGUE_CHANCE := 0.012  ## per month, world-wide (about one outbreak in 7 years)
+const NATURAL_FIRE_CHANCE := 0.06     ## per month, world-wide, scaled by world size
+const NATURAL_PLAGUE_CHANCE := 0.006  ## per month, world-wide (about one outbreak in 14 years)
 const PLAGUE_MIN_POP := 40
 const RECORD_GAP_TICKS := 90          ## chronicle rate limit per event key
+const IMPACT_RECORD_GAP := 60         ## meteors/quakes/volcanoes: at most one entry per 6 s
+const SETTLED_SPREAD := 0.45
+const FIRE_DAMP_SIZE := 1200.0
+const HALL_QUAKE_FACTOR := 0.2
 
 ## Base spread chance per fire step into a tile of each biome (by biome id).
 const FLAMMABILITY := {"grassland": 0.05, "forest": 0.3, "hills": 0.06, "swamp": 0.04, "mystic": 0.22,
@@ -96,8 +100,10 @@ func update() -> void:
 func monthly() -> void:
 	if not sim.laws.is_on("natural_disasters"):
 		return
+	# Lightning fires only in the dry season (months 6-9), and only in dry country.
 	var scale := float(sim.world.size) / 65536.0
-	if sim.rng.chance(minf(0.5, NATURAL_FIRE_CHANCE * scale)):
+	var dry_season := sim.month() >= 6 and sim.month() <= 9
+	if dry_season and sim.rng.chance(minf(0.5, NATURAL_FIRE_CHANCE * scale)):
 		var i := _dry_fuel_tile()
 		if i >= 0:
 			ignite(i)
@@ -133,7 +139,7 @@ func _dry_fuel_tile() -> int:
 	for attempt in 60:
 		var i := sim.rng.randi_range(0, w.size - 1)
 		var b := w.biome[i]
-		if (b == Defs.forest_index or b == Defs.grassland_index) and w.moisture[i] < 0.55 and w.vegetation[i] > 120:
+		if (b == Defs.forest_index or b == Defs.grassland_index) and w.moisture[i] < 0.45 and w.vegetation[i] > 120 and w.owner[i] == SimConst.CITY_NONE:
 			return i
 	return -1
 
@@ -181,13 +187,16 @@ func _fire_step() -> void:
 	var next_f := PackedInt32Array()
 	var ignite_list := PackedInt32Array()
 	var dirs := [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]
+	# Very large fires burn out their surroundings' oxygen and slow down.
+	var damp := clampf(1.0 - float(n) / FIRE_DAMP_SIZE, 0.35, 1.0)
 	for k in n:
 		var i := burning[k]
 		var x := i % width
 		var y := i / width
 		# Buildings burn down.
+		# Wooden buildings burn down; the stone town hall survives fire.
 		var bid := w.building[i]
-		if bid != SimConst.BUILDING_ID_NONE and sim.buildings.has(bid) and sim.rng.chance(BUILDING_BURN_CHANCE):
+		if bid != SimConst.BUILDING_ID_NONE and sim.buildings.has(bid) and not _fireproof(bid) and sim.rng.chance(BUILDING_BURN_CHANCE):
 			sim.civ.destroy_building(bid, "burned down")
 		# Spread.
 		for d: Vector2i in dirs:
@@ -198,9 +207,12 @@ func _fire_step() -> void:
 			var j := ny * width + nx
 			if on_fire[j] == 1:
 				continue
-			var p := _flam[w.biome[j]]
+			var p := _flam[w.biome[j]] * damp
 			if p <= 0.0:
 				continue
+			# Townsfolk beat back flames on their own land.
+			if w.owner[j] != SimConst.CITY_NONE:
+				p *= SETTLED_SPREAD
 			if w.biome[j] == Defs.grassland_index or w.biome[j] == Defs.farmland_index:
 				p *= 0.35 + 0.65 * float(w.vegetation[j]) / 255.0
 			p *= 1.0 - 0.8 * w.moisture[j]
@@ -221,6 +233,10 @@ func _fire_step() -> void:
 	for j in ignite_list:
 		ignite(j)
 	_fire_units()
+
+
+func _fireproof(bid: int) -> bool:
+	return (sim.buildings[bid] as Building).def().id == "town_hall"
 
 
 func _burn_out(i: int) -> void:
@@ -354,6 +370,13 @@ func meteor(x: int, y: int, r: int) -> Dictionary:
 	var radius := maxf(3.0, float(r) + 2.0)
 	var killed := 0
 	var u := sim.units
+	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
+	# Chronicle first, while the town that is about to be hit still exists.
+	var doomed := 0
+	for s in sim.spatial.query_radius(u, x + 0.5, y + 0.5, radius):
+		if not u.has_flag(s, UnitStore.Flag.INVULNERABLE) and (Vector2(u.x[s] - x - 0.5, u.y[s] - y - 0.5).length() <= radius * 0.6 or u.health[s] <= u.max_health[s] * 0.5):
+			doomed += 1
+	record("meteor", HistoryLog.Kind.DISASTER, "A meteor struck near %s%s." % [place_name(at), (", killing %d" % doomed) if doomed > 0 else ""], at, IMPACT_RECORD_GAP)
 	for s in sim.spatial.query_radius(u, x + 0.5, y + 0.5, radius):
 		if u.has_flag(s, UnitStore.Flag.INVULNERABLE):
 			continue
@@ -394,14 +417,15 @@ func meteor(x: int, y: int, r: int) -> Dictionary:
 				ignite(i)
 			w.mark_dirty(i)
 	sim.spatial.rebuild(sim.units)
-	sim.push_fx("meteor", w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1)), {"r": radius})
-	record("meteor", HistoryLog.Kind.DISASTER, "A meteor struck near %s%s." % [place_name(w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))), (", killing %d" % killed) if killed > 0 else ""], w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1)), 0)
+	sim.push_fx("meteor", at, {"r": radius})
 	return {"killed": killed}
 
 
 func earthquake(x: int, y: int, r: int) -> void:
 	var w := sim.world
 	var radius := maxi(8, r * 2 + 6)
+	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
+	record("quake", HistoryLog.Kind.DISASTER, "The earth shook near %s." % place_name(at), at, IMPACT_RECORD_GAP)
 	quakes.append({"x": x, "y": y, "r": radius, "left": QUAKE_TICKS})
 	# A fissure opens through the epicentre.
 	var ang := sim.rng.randf() * TAU
@@ -423,9 +447,7 @@ func earthquake(x: int, y: int, r: int) -> void:
 			w.set_biome(i, Defs.biome_index("soil"))
 			sim.pathfinder.refresh_tile_cost(i)
 		w.mark_dirty(i)
-	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
 	sim.push_fx("quake", at, {"r": radius, "dur": float(QUAKE_TICKS) / SimConst.TICKS_PER_SECOND})
-	record("quake", HistoryLog.Kind.DISASTER, "The earth shook near %s." % place_name(at), at, 0)
 
 
 func _quake_tick() -> void:
@@ -445,7 +467,7 @@ func _quake_tick() -> void:
 				continue
 			var i := w.idx(tx, ty)
 			var bid := w.building[i]
-			if bid != SimConst.BUILDING_ID_NONE and sim.buildings.has(bid) and sim.rng.chance(QUAKE_COLLAPSE_CHANCE):
+			if bid != SimConst.BUILDING_ID_NONE and sim.buildings.has(bid) and sim.rng.chance(QUAKE_COLLAPSE_CHANCE * (HALL_QUAKE_FACTOR if _fireproof(bid) else 1.0)):
 				sim.civ.destroy_building(bid, "collapsed in an earthquake")
 			w.elevation[i] = clampf(w.elevation[i] + sim.rng.randf_range(-0.01, 0.01), 0.0, 1.0)
 		if int(q["left"]) % 10 == 0:
@@ -464,6 +486,8 @@ func _quake_tick() -> void:
 func volcano(x: int, y: int, r: int) -> void:
 	var w := sim.world
 	var radius := maxi(3, r + 2)
+	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
+	record("volcano", HistoryLog.Kind.DISASTER, "A volcano erupted near %s." % place_name(at), at, IMPACT_RECORD_GAP)
 	for dy in range(-radius, radius + 1):
 		for dx in range(-radius, radius + 1):
 			var tx := x + dx
@@ -483,9 +507,7 @@ func volcano(x: int, y: int, r: int) -> void:
 				w.set_biome(i, _ash)
 				sim.pathfinder.refresh_tile_cost(i)
 			w.mark_dirty(i)
-	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
 	sim.push_fx("quake", at, {"r": radius, "dur": 1.0})
-	record("volcano", HistoryLog.Kind.DISASTER, "A volcano erupted near %s." % place_name(at), at, 0)
 
 
 func rain(x: int, y: int, r: int) -> int:

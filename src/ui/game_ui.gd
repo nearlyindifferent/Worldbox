@@ -106,6 +106,11 @@ func _process(delta: float) -> void:
 	elif stats.visible:
 		left_w = stats.size.x + 8
 	perf.position = Vector2(8 + left_w, 60)
+	# Side panels stop above the power bar, whose height changes on narrow screens.
+	var bottom := -(power_bar.size.y + 8.0)
+	for p: Control in [inspector, history, stats, admin]:
+		if p.offset_bottom != bottom:
+			p.offset_bottom = bottom
 
 
 func _layout() -> void:

@@ -284,18 +284,43 @@ func _ensure_leader(c: City) -> void:
 	var u := sim.units
 	if u.is_alive_id(c.leader_id):
 		return
-	# Eldest member leads; if only children remain, the eldest child rules (regency).
+	# The town chooses its most respected adult: age brings standing, and wise or
+	# just people are preferred. If only children remain, the eldest child rules.
 	var best := -1
+	var best_score := -INF
 	for mid in c.members:
 		var s := u.slot_for(mid)
-		if s >= 0 and (best < 0 or u.birth_tick[s] < u.birth_tick[best]):
+		if s < 0:
+			continue
+		var age := u.age_years(s, sim.tick)
+		var score := age if age < _human.adult_age else 100.0 + minf(age, 60.0) * 0.5 + _leader_merit(u.traits[s])
+		if score > best_score:
+			best_score = score
 			best = s
 	if best >= 0:
 		c.leader_id = u.id[best]
 		var adult := u.age_years(best, sim.tick) >= _human.adult_age
-		sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became %s of %s." % [u.name[best], "leader" if adult else "child ruler", c.name], {"city": c.id, "unit": u.id[best]}, c.center)
+		var ep := Traits.epithet(u.traits[best])
+		var who := u.name[best] + ((" " + ep) if ep != "" else "")
+		var realm: Kingdom = sim.kingdoms.get(c.kingdom, null)
+		var title := "leader" if adult else "child ruler"
+		if realm != null and realm.capital == c.id:
+			sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became %s of %s and ruler of the %s." % [who, title, c.name, realm.name], {"city": c.id, "unit": u.id[best], "kingdom": realm.id}, c.center)
+		else:
+			sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became %s of %s." % [who, title, c.name], {"city": c.id, "unit": u.id[best]}, c.center)
 		sim.decisions.record(sim.tick, "succession", c.name, "chose %s as leader" % u.name[best],
-			[["rule", "eldest member" if adult else "no adults left: eldest child"], ["age", u.age_years(best, sim.tick)]], {"city": c.id})
+			[["rule", "most respected adult" if adult else "no adults left: eldest child"], ["age", u.age_years(best, sim.tick)], ["traits", ", ".join(Traits.names(u.traits[best]))]], {"city": c.id})
+
+
+static func _leader_merit(mask: int) -> float:
+	var m := 0.0
+	if Traits.has(mask, Traits.WISE):
+		m += 12.0
+	if Traits.has(mask, Traits.JUST):
+		m += 8.0
+	if Traits.has(mask, Traits.BRAVE) or Traits.has(mask, Traits.STRONG):
+		m += 4.0
+	return m
 
 
 ## Target worker counts in priority order. Pure function of city state.

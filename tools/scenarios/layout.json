@@ -1,0 +1,14 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "ticks", "n": 600},
+  {"do": "power", "id": "raise"},
+  {"do": "frames", "n": 8},
+  {"do": "shot", "name": "layout_terrain"},
+  {"do": "power", "id": "meteor"},
+  {"do": "frames", "n": 5},
+  {"do": "shot", "name": "layout_disasters"},
+  {"do": "power", "id": "inspect"},
+  {"do": "select_city", "index": 0},
+  {"do": "frames", "n": 10},
+  {"do": "shot", "name": "layout_city"}
+]

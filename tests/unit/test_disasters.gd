@@ -163,3 +163,24 @@ func test_disasters_survive_save_and_clone_identically() -> void:
 	assert_eq(copy.state_hash(), sim.state_hash(), "clone mid-disaster evolves identically")
 	assert_eq(loaded.state_hash(), sim.state_hash(), "save/load mid-disaster evolves identically")
 	m.delete_slot("d")
+
+
+func test_a_wildfire_does_not_wipe_out_a_town() -> void:
+	var sim := TestWorlds.flat(96)
+	sim.laws.set_law("natural_disasters", false)
+	var band := TestWorlds.add_band(sim, 40.5, 40.5, 12)
+	var c := sim.civ.found_city(band[0], sim.world.idx(40, 40), [])
+	for k in 4:
+		sim.civ._place_building(c, Defs.building_by_id("house").index, 34 + k * 3, 45, true)
+	# Surround the town with forest and set it alight.
+	var w := sim.world
+	for y in range(30, 52):
+		for x in range(30, 52):
+			var i := w.idx(x, y)
+			if w.building[i] == SimConst.BUILDING_ID_NONE and w.biome[i] == Defs.grassland_index:
+				w.set_biome(i, Defs.forest_index)
+	for y in range(30, 52):
+		sim.disasters.ignite(w.idx(30, y))
+	run_ticks(sim, 900)
+	assert_true(sim.cities.has(c.id), "the stone town hall survives, so the town endures")
+	assert_no_violations(sim, "after the town fire")
