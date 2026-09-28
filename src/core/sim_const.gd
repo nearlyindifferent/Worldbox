@@ -15,7 +15,7 @@ const CHUNK := 16
 ## Units re-plan ("think") at most this often; staggered by slot so load is flat.
 const THINK_INTERVAL := 8
 ## Vegetation/crop cellular update visits each chunk once per this many ticks.
-const VEG_CYCLE_TICKS := 20
+const VEG_CYCLE_TICKS := 60
 ## City economic planning cadence.
 const CITY_PLAN_INTERVAL := 30
 ## Max A* path requests served per tick. Excess requests wait a tick.
@@ -41,11 +41,11 @@ const CITY_JOIN_RADIUS := 12
 const FOUND_EVAL_INTERVAL := 90
 
 ## Vegetation growth per VEG_CYCLE visit, scaled by fertility.
-const VEG_GROWTH := 8.0
+const VEG_GROWTH := 24.0
 ## Probability (per visit) that a treeless fertile tile next to forest turns to forest.
-const FOREST_SPREAD_CHANCE := 0.004
+const FOREST_SPREAD_CHANCE := 0.012
 ## Crop growth per VEG_CYCLE visit on farmland (0..255 maturity).
-const CROP_GROWTH := 30.0
+const CROP_GROWTH := 90.0
 const CROP_MATURE := 240
 
 const BUILDING_ID_NONE := -1

@@ -4,10 +4,32 @@ extends RefCounted
 ## every tile regrows once per cycle at constant per-tick cost regardless of world size.
 
 var sim: Simulation
+## Per-chunk "contains any land" cache, refreshed when the chunk's revision changes.
+var _has_land := PackedByteArray()
+var _land_rev := PackedInt32Array()
 
 
 func _init(p_sim: Simulation) -> void:
 	sim = p_sim
+	var n := sim.world.chunks_x * sim.world.chunks_y
+	_has_land.resize(n)
+	_land_rev.resize(n)
+	_land_rev.fill(-1)
+
+
+func _chunk_has_land(c: int, x0: int, y0: int, x1: int, y1: int) -> bool:
+	var w := sim.world
+	if _land_rev[c] != w.chunk_rev[c]:
+		_land_rev[c] = w.chunk_rev[c]
+		_has_land[c] = 0
+		for y in range(y0, y1):
+			for x in range(x0, x1):
+				if Defs.biome_water[w.biome[y * w.width + x]] == 0:
+					_has_land[c] = 1
+					break
+			if _has_land[c] == 1:
+				break
+	return _has_land[c] == 1
 
 
 func update() -> void:
@@ -25,12 +47,16 @@ func update() -> void:
 		var y0 := (c / w.chunks_x) * SimConst.CHUNK
 		var x1 := mini(x0 + SimConst.CHUNK, w.width)
 		var y1 := mini(y0 + SimConst.CHUNK, w.height)
+		if not _chunk_has_land(c, x0, y0, x1, y1):
+			continue
 		var changed := false
 		for y in range(y0, y1):
 			var row := y * w.width
 			for x in range(x0, x1):
 				var i := row + x
 				var b := w.biome[i]
+				if Defs.biome_water[b] == 1:
+					continue
 				var v := w.vegetation[i]
 				if b == farmland:
 					if grow and v < 255:
@@ -44,7 +70,7 @@ func update() -> void:
 					w.vegetation[i] = nv
 					changed = changed or (nv >> 6) != (v >> 6)
 				if b == forest and w.wood[i] < forest_wood:
-					w.wood[i] = mini(forest_wood, w.wood[i] + 3)
+					w.wood[i] = mini(forest_wood, w.wood[i] + 9)
 				elif spread and b == grass and w.owner[i] == SimConst.CITY_NONE and sim.rng.chance(SimConst.FOREST_SPREAD_CHANCE):
 					if _neighbor_is(i, x, y, forest):
 						w.set_biome(i, forest)

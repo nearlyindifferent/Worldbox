@@ -33,12 +33,6 @@ func update() -> void:
 			_plan(c)
 		if monthly and c.alive:
 			_monthly(c)
-	var dead: Array[int] = []
-	for c: City in sim.cities.values():
-		if not c.alive:
-			dead.append(c.id)
-	for id in dead:
-		sim.cities.erase(id)
 
 
 # ------------------------------------------------------------------ founding
@@ -761,6 +755,8 @@ func abandon_city(c: City, reason: String) -> void:
 	c.territory = PackedInt32Array()
 	c.fields = PackedInt32Array()
 	c.alive = false
+	# Remove immediately so nothing can join or reference the dead city later this tick.
+	sim.cities.erase(c.id)
 	sim.history.record(sim.tick, HistoryLog.Kind.CITY_ABANDONED, "%s was abandoned: %s." % [c.name, reason], {"city": c.id}, c.center)
 	sim.decisions.record(sim.tick, "settlement", c.name, "was abandoned", [["reason", reason]], {"city": c.id})
 
