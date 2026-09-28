@@ -1,0 +1,10 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "ticks", "n": 1200},
+  {"do": "focus", "target": "city", "index": 0, "zoom": 4.0},
+  {"do": "frames", "n": 10},
+  {"do": "shot", "name": "closeup_city"},
+  {"do": "focus", "target": "center", "zoom": 2.5},
+  {"do": "frames", "n": 10},
+  {"do": "shot", "name": "closeup_land"}
+]

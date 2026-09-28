@@ -45,6 +45,8 @@ func _ready() -> void:
 	_mat.set_shader_parameter("forest_index", Defs.forest_index)
 	_mat.set_shader_parameter("grass_index", Defs.grassland_index)
 	_mat.set_shader_parameter("lava_index", Defs.biome_index("lava"))
+	_mat.set_shader_parameter("mountain_index", Defs.mountain_index)
+	_mat.set_shader_parameter("snow_index", Defs.biome_index("snow"))
 	_mat.set_shader_parameter("chunk_size", float(SimConst.CHUNK))
 
 

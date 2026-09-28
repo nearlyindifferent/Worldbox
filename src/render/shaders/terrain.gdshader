@@ -14,6 +14,8 @@ uniform int farmland_index = 14;
 uniform int forest_index = 6;
 uniform int grass_index = 5;
 uniform int lava_index = 16;
+uniform int mountain_index = 8;
+uniform int snow_index = 9;
 uniform int max_water_index = 2;
 uniform bool show_territory = true;
 uniform float territory_fill = 0.16;
@@ -103,8 +105,18 @@ void fragment() {
 		c.rgb = mix(c.rgb, DRY * c.rgb * 1.6, float(2 - veg) * 0.28);
 	}
 
-	float hs = float(d.b) / 255.0;
-	c.rgb *= 0.80 + 0.40 * hs;
+	// Hillshade interpolated between tile centres at art-pixel resolution, so
+	// slopes read as smooth pixel gradients instead of tile-sized steps.
+	vec2 sp = vec2(t) + (vec2(px) + 0.5) / TILE_PX - 0.5;
+	ivec2 s0 = ivec2(floor(sp));
+	vec2 sf = sp - vec2(s0);
+	float h00 = float(texel_i(data_tex, s0).b);
+	float h10 = float(texel_i(data_tex, s0 + ivec2(1, 0)).b);
+	float h01 = float(texel_i(data_tex, s0 + ivec2(0, 1)).b);
+	float h11 = float(texel_i(data_tex, s0 + ivec2(1, 1)).b);
+	float hs = mix(mix(h00, h10, sf.x), mix(h01, h11, sf.x), sf.y) / 255.0;
+	bool rocky = b == mountain_index || b == snow_index;
+	c.rgb *= rocky ? (0.62 + 0.75 * hs) : (0.80 + 0.40 * hs);
 
 	if (b == lava_index) {
 		float pulse = 0.5 + 0.5 * sin(anim_time * 2.4 + hash12(vec2(t)) * 6.2831 + float(px.x + px.y) * 0.6);

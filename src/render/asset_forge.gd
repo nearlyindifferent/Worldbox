@@ -121,15 +121,19 @@ static func _draw_tile(img: Image, b: Defs.BiomeDef, v: int, ox: int, oy: int, r
 			for k in 3:
 				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
 		"mountain":
-			var bx := rng.randi_range(-1, 1)
-			for y in 8:
-				var half := y / 2 + 1
-				for x in range(4 - half, 4 + half):
-					var col := light if x < 4 else dark
-					if y <= 1 and v % 2 == 0:
-						col = acc if x < 4 else light
-					_px(img, ox + x + bx, oy + y, col)
-			_px(img, ox + 3 + bx, oy, acc)
+			# Rock texture (cracks, ledges, lit specks); form comes from the hillshade.
+			for k in 3:
+				var cx := rng.randi_range(0, 6)
+				var cy := rng.randi_range(0, 5)
+				var ln := rng.randi_range(2, 3)
+				for j in ln:
+					_px(img, ox + cx + j, oy + cy + (j if v % 2 == 0 else 0), dark)
+			for k in 2:
+				var lx := rng.randi_range(0, 5)
+				var ly := rng.randi_range(0, 7)
+				_hline(img, ox + lx, oy + ly, 3, light)
+			for k in 3:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), acc if k == 0 else light)
 		"snow":
 			for k in 5:
 				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
