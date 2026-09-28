@@ -32,7 +32,7 @@ const PLAGUE_SPREAD_RADIUS := 1.6
 const PLAGUE_SPREAD_CHANCE := 0.09
 const PLAGUE_DAMAGE := 0.7            ## base health per tick, scaled by a per-person frailty
 const NATURAL_FIRE_CHANCE := 0.035    ## per month, world-wide, scaled by world size
-const NATURAL_PLAGUE_CHANCE := 0.004  ## per month per crowded city
+const NATURAL_PLAGUE_CHANCE := 0.012  ## per month, world-wide (about one outbreak in 7 years)
 const PLAGUE_MIN_POP := 40
 const RECORD_GAP_TICKS := 90          ## chronicle rate limit per event key
 
@@ -102,17 +102,30 @@ func monthly() -> void:
 		if i >= 0:
 			ignite(i)
 			record("wildfire", HistoryLog.Kind.DISASTER, "Lightning set the land ablaze near %s." % place_name(i), i)
-	for c: City in sim.cities.values():
-		if c.population() >= PLAGUE_MIN_POP and sim.rng.chance(NATURAL_PLAGUE_CHANCE * float(c.population()) / PLAGUE_MIN_POP):
-			var n := 0
-			for mid in c.members:
-				var s := sim.units.slot_for(mid)
-				if s >= 0 and infect(s):
-					n += 1
-				if n >= 2:
-					break
-			if n > 0:
-				record("plague:%d" % c.id, HistoryLog.Kind.DISASTER, "Plague broke out in %s." % c.name, c.center)
+	# Plague is a rare world event that strikes a crowded town (bigger towns are likelier).
+	if sim.rng.chance(NATURAL_PLAGUE_CHANCE):
+		var total := 0
+		for c: City in sim.cities.values():
+			if c.population() >= PLAGUE_MIN_POP:
+				total += c.population()
+		if total > 0:
+			var pick := sim.rng.randi_range(0, total - 1)
+			for c: City in sim.cities.values():
+				if c.population() < PLAGUE_MIN_POP:
+					continue
+				pick -= c.population()
+				if pick >= 0:
+					continue
+				var n := 0
+				for mid in c.members:
+					var s := sim.units.slot_for(mid)
+					if s >= 0 and infect(s):
+						n += 1
+					if n >= 2:
+						break
+				if n > 0:
+					record("plague:%d" % c.id, HistoryLog.Kind.DISASTER, "Plague broke out in %s." % c.name, c.center, SimConst.TICKS_PER_YEAR * 5)
+				break
 
 
 func _dry_fuel_tile() -> int:
@@ -516,7 +529,7 @@ func _plague_spread() -> void:
 		if u.alive[s] == 0 or u.disease[s] <= 0:
 			continue
 		u.disease[s] = maxi(0, u.disease[s] - PLAGUE_SPREAD_EVERY)
-		u.health[s] -= PLAGUE_DAMAGE * PLAGUE_SPREAD_EVERY * frailty(u.id[s])
+		u.health[s] -= PLAGUE_DAMAGE * PLAGUE_SPREAD_EVERY * frailty(u.id[s]) * (1.6 if Traits.has(u.traits[s], Traits.SICKLY) else 1.0)
 		if u.health[s] <= 0.0:
 			dead.append(s)
 			continue

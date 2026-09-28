@@ -140,7 +140,7 @@ func _think(s: int) -> void:
 
 	# War: civilians run home from enemy soldiers.
 	var soldier_job := _jobs[u.job[s]].id == "soldier"
-	if not soldier_job and city.kingdom >= 0 and sim.realm.is_at_war(city.kingdom):
+	if not soldier_job and city.kingdom >= 0 and not Traits.has(u.traits[s], Traits.BRAVE) and sim.realm.is_at_war(city.kingdom):
 		if _nearest_enemy(s, city.kingdom, FLEE_RADIUS, true) >= 0:
 			var cx := city.center % w.width
 			var cy := city.center / w.width
@@ -306,6 +306,15 @@ func _soldier(s: int, city: City) -> bool:
 	return false
 
 
+## Food yield multiplier from a wise town leader.
+func _leader_bonus(s: int) -> float:
+	var c: City = sim.cities.get(sim.units.city[s], null)
+	if c == null:
+		return 1.0
+	var ls := sim.units.slot_for(c.leader_id)
+	return 1.15 if ls >= 0 and Traits.has(sim.units.traits[ls], Traits.WISE) else 1.0
+
+
 func _resolve_attack(s: int) -> void:
 	var u := sim.units
 	var e := u.task_target[s]
@@ -320,6 +329,8 @@ func _resolve_attack(s: int) -> void:
 	if u.has_flag(e, UnitStore.Flag.INVULNERABLE):
 		return
 	var dmg := float(Defs.job_by_id("soldier").raw.get("damage", 10.0)) * sim.rng.randf_range(0.7, 1.3)
+	if Traits.has(u.traits[s], Traits.STRONG):
+		dmg *= 1.25
 	u.health[e] -= dmg
 	var et := int(u.y[e]) * sim.world.width + int(u.x[e])
 	sim.push_fx("hit", et)
@@ -471,7 +482,7 @@ func _on_work_done(s: int) -> void:
 			if have >= cost:
 				w.vegetation[ti] = have - cost
 				w.mark_dirty(ti)
-				var food := jd.yield_amount * (Defs.biomes[w.biome[ti]] as Defs.BiomeDef).veg_food
+				var food := jd.yield_amount * (Defs.biomes[w.biome[ti]] as Defs.BiomeDef).veg_food * _leader_bonus(s)
 				_receive(s, CARRY_FOOD, food)
 		UnitStore.Task.FARM:
 			if w.biome[ti] == Defs.farmland_index:
@@ -481,7 +492,7 @@ func _on_work_done(s: int) -> void:
 					w.mark_dirty(ti)
 					var soil := float(w.wood[ti]) / SimConst.SOIL_MAX
 					w.wood[ti] = maxi(0, w.wood[ti] - SimConst.SOIL_DRAIN)
-					_receive(s, CARRY_FOOD, jd.yield_amount * (0.5 + 0.5 * w.fertility(ti)) * (0.35 + 0.65 * soil))
+					_receive(s, CARRY_FOOD, jd.yield_amount * (0.5 + 0.5 * w.fertility(ti)) * (0.35 + 0.65 * soil) * _leader_bonus(s))
 					# Keep harvesting neighbouring ripe fields before the walk to storage.
 					if u.carry_amount[s] < FARM_CARRY_LIMIT:
 						var city: City = sim.cities.get(u.city[s], null)

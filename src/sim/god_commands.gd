@@ -168,12 +168,14 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 	if sim.editor.is_terrain_power(power):
 		return _ok("", {"changed": sim.editor.apply_brush(power, x, y, r)})
 	match power:
-		"spawn_human", "spawn_sheep":
-			var sp := sim.human_species if power == "spawn_human" else sim.sheep_species
+		"spawn_human", "spawn_sheep", "spawn_wolf":
+			var sp := sim.human_species if power == "spawn_human" else (sim.sheep_species if power == "spawn_sheep" else sim.wolf_species)
 			var n := 1 + r / 2
 			var made := 0
 			for k in n:
 				var s := sim.spawn_unit(sp, float(x) + 0.5 + sim.rng.randf_range(-r, r) * 0.5, float(y) + 0.5 + sim.rng.randf_range(-r, r) * 0.5, sim.rng.randf_range(16.0, 28.0) if sp == sim.human_species else sim.rng.randf_range(1.0, 4.0))
+				if s >= 0 and sp == sim.wolf_species:
+					sim.units.sex[s] = k % 2
 				if s >= 0:
 					made += 1
 			return _ok("", {"spawned": made}) if made > 0 else _fail("Creatures need dry land")

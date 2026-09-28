@@ -56,7 +56,7 @@ func _ready() -> void:
 	row.add_child(_vsep())
 	for spec: Array in [["history", "Chronicle  [T]", func() -> void: game.ui.toggle_history()],
 			["save", "Save / Load / New world  [Esc]", func() -> void: game.ui.toggle_menu()],
-			["perf", "Performance overlay  [F3]", func() -> void: game.ui.perf.visible = not game.ui.perf.visible],
+			["perf", "World stats  [G]", func() -> void: game.ui.toggle_stats()],
 			["admin", "Admin panel  [F1]", func() -> void: game.ui.toggle_admin()]]:
 		var b := Button.new()
 		b.theme_type_variation = "ToolButton"

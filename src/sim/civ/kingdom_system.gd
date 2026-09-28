@@ -103,7 +103,8 @@ func ruler_aggression(k: Kingdom) -> float:
 	var s := sim.units.slot_for(k.ruler_id)
 	if s < 0:
 		return 0.5
-	return float((sim.units.look[s] >> 12) & 15) / 15.0
+	var base := float((sim.units.look[s] >> 12) & 15) / 15.0
+	return minf(1.0, base + 0.35) if Traits.has(sim.units.traits[s], Traits.WARLIKE) else base
 
 
 func population(k: Kingdom) -> int:
@@ -268,13 +269,20 @@ func _update_loyalty(k: Kingdom) -> void:
 		return
 	var w := sim.world.width
 	var cp := Vector2(cap.center % w, cap.center / w)
+	var rs := sim.units.slot_for(k.ruler_id)
+	var temper := 0.0
+	if rs >= 0:
+		if Traits.has(sim.units.traits[rs], Traits.JUST):
+			temper = 10.0
+		elif Traits.has(sim.units.traits[rs], Traits.GREEDY):
+			temper = -10.0
 	for cid in k.cities:
 		var c: City = sim.cities[cid]
 		if c.id == k.capital:
 			c.loyalty = 100.0
 			continue
 		var d := cp.distance_to(Vector2(c.center % w, c.center / w))
-		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4
+		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4 + temper
 		c.loyalty = clampf(c.loyalty + (clampf(target, 0.0, 100.0) - c.loyalty) * 0.1, 0.0, 100.0)
 
 

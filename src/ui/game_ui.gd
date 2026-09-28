@@ -8,6 +8,7 @@ var top_bar: TopBar
 var power_bar: PowerBar
 var inspector: InspectorPanel
 var history: HistoryPanel
+var stats: StatsPanel
 var admin: AdminPanel
 var perf: PerfOverlay
 var menu: MenuPanel
@@ -42,6 +43,11 @@ func _ready() -> void:
 	history.game = game
 	history.visible = false
 	add_child(history)
+
+	stats = StatsPanel.new()
+	stats.game = game
+	stats.visible = false
+	add_child(stats)
 
 	hover_panel = PanelContainer.new()
 	hover_panel.add_theme_stylebox_override("panel", UiTheme.box(Color("#1c1512", 0.8), Color(0, 0, 0, 0), Color(0, 0, 0, 0), 4, 0))
@@ -97,6 +103,8 @@ func _process(delta: float) -> void:
 		left_w = admin.size.x + 8
 	elif history.visible:
 		left_w = history.size.x + 8
+	elif stats.visible:
+		left_w = stats.size.x + 8
 	perf.position = Vector2(8 + left_w, 60)
 
 
@@ -130,6 +138,8 @@ func on_key(k: InputEventKey) -> void:
 			perf.visible = not perf.visible
 		KEY_T:
 			toggle_history()
+		KEY_G:
+			toggle_stats()
 
 
 ## The chronicle and the admin console share the left dock; opening one closes the other.
@@ -137,6 +147,7 @@ func toggle_admin() -> void:
 	admin.visible = not admin.visible
 	if admin.visible:
 		history.visible = false
+		stats.visible = false
 		admin.refresh_all()
 
 
@@ -144,6 +155,14 @@ func toggle_history() -> void:
 	history.visible = not history.visible
 	if history.visible:
 		admin.visible = false
+		stats.visible = false
+
+
+func toggle_stats() -> void:
+	stats.visible = not stats.visible
+	if stats.visible:
+		admin.visible = false
+		history.visible = false
 
 
 func toggle_menu() -> void:

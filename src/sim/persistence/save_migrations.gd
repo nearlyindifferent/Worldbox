@@ -73,6 +73,7 @@ static func _v3_to_v4(d: Dictionary) -> Dictionary:
 	var dis := PackedInt32Array()
 	dis.resize(int(ud.get("capacity", 0)))
 	ud["disease"] = dis
+	ud["traits"] = dis.duplicate()
 	d["disasters"] = {"burning": PackedInt32Array(), "fuel": PackedInt32Array(), "lava": PackedInt32Array(),
 		"lava_t": PackedInt32Array(), "lava_flow": PackedInt32Array(), "quakes": [], "last_record": {}}
 	for c: Dictionary in d["cities"]:

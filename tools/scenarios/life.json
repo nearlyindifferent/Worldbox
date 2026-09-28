@@ -1,0 +1,19 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "ticks", "n": 3600},
+  {"do": "speed", "i": 1},
+  {"do": "focus", "target": "city", "index": 0, "zoom": 3.0},
+  {"do": "power", "id": "spawn_wolf"},
+  {"do": "radius", "value": 3},
+  {"do": "brush", "city": 0, "dx": 12, "dy": 0},
+  {"do": "ticks", "n": 20},
+  {"do": "frames", "n": 10},
+  {"do": "power", "id": "inspect"},
+  {"do": "select_unit", "index": 3},
+  {"do": "frames", "n": 20},
+  {"do": "shot", "name": "life_inspector"},
+  {"do": "key", "key": "Escape"},
+  {"do": "key", "key": "G"},
+  {"do": "frames", "n": 30},
+  {"do": "shot", "name": "life_stats"}
+]

@@ -56,6 +56,7 @@ var timings: Dictionary = {}    ## system -> smoothed microseconds per tick
 var last_tick_usec: int = 0
 var human_species: int = 0
 var sheep_species: int = 1
+var wolf_species: int = 2
 
 
 static func create_new(p_seed: int, w: int, h: int, p_shape: String = "island", populate: bool = true) -> Simulation:
@@ -76,6 +77,7 @@ static func create_new(p_seed: int, w: int, h: int, p_shape: String = "island", 
 func _init_systems() -> void:
 	human_species = Defs.species_by_id("human").index
 	sheep_species = Defs.species_by_id("sheep").index
+	wolf_species = Defs.species_by_id("wolf").index
 	spatial.setup(world.width, world.height)
 	world.drain_walk_changes()
 	pathfinder.setup(world)
@@ -88,7 +90,7 @@ func _init_systems() -> void:
 	vegetation = VegetationSystem.new(self)
 	disasters = DisasterSystem.new(self)
 	editor = TerrainEditor.new(self)
-	for n in ["population", "humans", "animals", "cities", "food", "births", "deaths"]:
+	for n in ["population", "humans", "animals", "cities", "food", "births", "deaths", "sheep", "wolves", "kingdoms", "sick"]:
 		if not stats.has(n):
 			stats[n] = StatSeries.new()
 	spatial.rebuild(units)
@@ -112,6 +114,15 @@ func populate_default() -> void:
 			break
 		for k in rng.randi_range(3, 6):
 			spawn_unit(sheep_species, float(t % world.width) + rng.randf_range(-2, 2) + 0.5, float(t / world.width) + rng.randf_range(-2, 2) + 0.5, rng.randf_range(1, 5))
+	var packs := clampi(world.size / 16000, 2, 12)
+	for pk in packs:
+		var t := _random_land_tile(0.4)
+		if t < 0:
+			break
+		for k in rng.randi_range(2, 4):
+			var ws := spawn_unit(wolf_species, float(t % world.width) + rng.randf_range(-1, 1) + 0.5, float(t / world.width) + rng.randf_range(-1, 1) + 0.5, rng.randf_range(1, 6))
+			if ws >= 0:
+				units.sex[ws] = k % 2
 	spatial.rebuild(units)
 
 
@@ -198,6 +209,7 @@ func step() -> void:
 
 	if tick % SimConst.TICKS_PER_YEAR == 0 and units.should_compact():
 		units.compact()
+		movement.reset_waypoints()
 		spatial.rebuild(units)
 	if tick % SimConst.TICKS_PER_MONTH == 0:
 		t = Time.get_ticks_usec()
@@ -223,12 +235,21 @@ func _smooth(key: String, v: int) -> void:
 func _sample_stats() -> void:
 	var humans := 0
 	var animals := 0
+	var sheep := 0
+	var wolves := 0
+	var sick := 0
 	for s in units.capacity:
 		if units.alive[s] == 1:
+			if units.disease[s] > 0:
+				sick += 1
 			if units.species[s] == human_species:
 				humans += 1
 			else:
 				animals += 1
+				if units.species[s] == sheep_species:
+					sheep += 1
+				elif units.species[s] == wolf_species:
+					wolves += 1
 	var food := 0.0
 	for c: City in cities.values():
 		food += float(c.storage["food"])
@@ -239,6 +260,10 @@ func _sample_stats() -> void:
 	(stats["food"] as StatSeries).push(food)
 	(stats["births"] as StatSeries).push(month_births)
 	(stats["deaths"] as StatSeries).push(month_deaths)
+	(stats["sheep"] as StatSeries).push(sheep)
+	(stats["wolves"] as StatSeries).push(wolves)
+	(stats["kingdoms"] as StatSeries).push(kingdoms.size())
+	(stats["sick"] as StatSeries).push(sick)
 	month_births = 0
 	month_deaths = 0
 	var milestone := 50
@@ -299,6 +324,20 @@ func spawn_unit(species_idx: int, px: float, py: float, age_years: float = 20.0,
 	units.father[s] = father_id
 	units.next_think[s] = tick + 1 + (s % SimConst.THINK_INTERVAL)
 	units.look[s] = _inherit_look(species_idx, mother_id, father_id)
+	var ms := units.slot_for(mother_id)
+	var fs := units.slot_for(father_id)
+	if ms >= 0 or fs >= 0:
+		units.traits[s] = Traits.inherit(rng, units.traits[ms] if ms >= 0 else 0, units.traits[fs] if fs >= 0 else 0, def.sapient)
+	else:
+		units.traits[s] = Traits.roll(rng, def.sapient)
+	var tr := units.traits[s]
+	if Traits.has(tr, Traits.STRONG):
+		units.max_health[s] *= 1.3
+		units.health[s] = units.max_health[s]
+	if Traits.has(tr, Traits.LONG_LIVED):
+		units.death_age[s] = int(units.death_age[s] * 1.2)
+	elif Traits.has(tr, Traits.SICKLY):
+		units.death_age[s] = int(units.death_age[s] * 0.85)
 	units.name[s] = NameGen.person_name(def, rng) if def.sapient else def.name.trim_suffix("s")
 	if def.sapient:
 		units.add_child_link(mother_id, units.id[s])

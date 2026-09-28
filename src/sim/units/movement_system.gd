@@ -58,6 +58,12 @@ func go_to(s: int, to_i: int, use_astar: bool) -> int:
 	return Plan.OK
 
 
+## Drops the derived waypoint cache (slots were renumbered); it is re-derived from paths.
+func reset_waypoints() -> void:
+	_wp.resize(sim.units.capacity)
+	_wp.fill(-1)
+
+
 func _set_wp(s: int, v: int) -> void:
 	if _wp.size() != sim.units.capacity:
 		_wp.resize(sim.units.capacity)
@@ -94,6 +100,8 @@ func advance_all() -> void:
 	var moving: int = UnitStore.State.MOVING
 	var idle: int = UnitStore.State.IDLE
 	var frozen_bit: int = UnitStore.Flag.FROZEN
+	var traits := u.traits
+	var swift_bit := 1 << Traits.SWIFT
 	for s in cap:
 		if alive[s] == 0 or state[s] != moving or (flags[s] & frozen_bit) != 0:
 			continue
@@ -115,6 +123,8 @@ func advance_all() -> void:
 		var cur_i := int(y) * w + int(x)
 		var cost := cost_tab[biome[cur_i]]
 		var spd := speed[species[s]] / (cost if cost > 0.0 else 1.0)
+		if (traits[s] & swift_bit) != 0:
+			spd *= 1.2
 		var dx := tx - x
 		var dy := ty - y
 		var d := sqrt(dx * dx + dy * dy)

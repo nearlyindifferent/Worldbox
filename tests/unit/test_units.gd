@@ -168,6 +168,40 @@ func test_unit_store_compacts_after_die_off_deterministically() -> void:
 	assert_no_violations(sim, "after compaction")
 
 
+func test_compaction_to_same_capacity_keeps_movement_cache_valid() -> void:
+	# Regression: compaction that keeps the capacity must not leave stale waypoints.
+	var sim := TestWorlds.flat(96)
+	for law in ["hunger", "natural_death", "animal_reproduction", "natural_disasters"]:
+		sim.laws.set_law(law, false)
+	for k in 460:
+		sim.spawn_unit(sim.sheep_species, 10.5 + (k % 60), 10.5 + (k / 60) * 2, 2.0)
+	# Everyone walks a long way, so dead slots leave cached waypoints behind.
+	for s in sim.units.capacity:
+		if sim.units.alive[s] == 1:
+			sim.units.set_flag(s, UnitStore.Flag.FROZEN, false)
+			sim.movement.go_to(s, sim.world.idx(90 - int(sim.units.x[s]) % 20, 90 - int(sim.units.y[s]) % 20), false)
+	var n := 0
+	for s in sim.units.capacity:
+		if sim.units.alive[s] == 1:
+			n += 1
+			if n % 2 == 0:
+				sim.kill_unit(s, "test")
+	var cap := sim.units.capacity
+	assert_true(sim.units.should_compact(), "setup triggers compaction (%d of %d)" % [sim.units.count, cap])
+	run_ticks(sim, SimConst.TICKS_PER_YEAR - 3 - sim.tick)
+	for s in sim.units.capacity:
+		if sim.units.alive[s] == 1:
+			sim.units.next_think[s] = sim.tick + 400
+			sim.movement.go_to(s, sim.world.idx(5 + int(sim.units.x[s]) % 20, 5 + int(sim.units.y[s]) % 20), false)
+	var copy := sim.clone()
+	run_ticks(sim, 60)
+	run_ticks(copy, 60)
+	note("capacity %d -> %d" % [cap, sim.units.capacity])
+	assert_eq(sim.units.capacity, cap, "setup keeps the capacity")
+	assert_no_violations(sim, "after same-capacity compaction")
+	assert_eq(copy.state_hash(), sim.state_hash(), "reloaded copy agrees after compaction")
+
+
 func test_deceased_eviction_is_fifo_and_cheap() -> void:
 	var sim := TestWorlds.flat(64)
 	var first_ids: Array = []

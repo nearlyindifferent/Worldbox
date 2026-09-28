@@ -42,7 +42,7 @@ func _init() -> void:
 			var wars := 0
 			for p: Dictionary in sim.realm.pairs.values():
 				if p["war"]: wars += 1
-			print("Y%3d humans %4d nomads %3d sheep %4d cities %2d kingdoms %2d wars %d | declared %d peace %d conquered %d rebellions %d fallen %d battle-dead %d | maxpop %3d starved %d tick %.2fms" % [sim.year(), sim.count_species(0), nomads, sim.count_species(1), sim.cities.size(), sim.kingdoms.size(), wars,
+			print("Y%3d humans %4d nomads %3d sheep %4d wolves %3d cities %2d kingdoms %2d wars %d | declared %d peace %d conquered %d rebellions %d fallen %d battle-dead %d | maxpop %3d starved %d tick %.2fms" % [sim.year(), sim.count_species(0), nomads, sim.count_species(1), sim.count_species(sim.wolf_species), sim.cities.size(), sim.kingdoms.size(), wars,
 				int(ev.get(HistoryLog.Kind.WAR_DECLARED, 0)), int(ev.get(HistoryLog.Kind.PEACE, 0)), int(ev.get(HistoryLog.Kind.CITY_CONQUERED, 0)), int(ev.get(HistoryLog.Kind.REBELLION, 0)), int(ev.get(HistoryLog.Kind.KINGDOM_FALLEN, 0)),
 				sim.count_deaths("battle", "human"), maxpop, sim.count_deaths("starvation", "human"), sim.timings.get("tick_total", 0) / 1000.0])
 	var errs := SimInvariants.check(sim)

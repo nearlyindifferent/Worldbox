@@ -47,6 +47,7 @@ var flags := PackedInt32Array()
 var kills := PackedInt32Array()
 var look := PackedInt32Array() ## packed cosmetic genes: skin/hair/wool indices
 var disease := PackedInt32Array() ## plague ticks remaining (0 = healthy)
+var traits := PackedInt32Array() ## Traits bitmask
 var name := PackedStringArray()
 
 var slot_of: Dictionary = {} ## id -> slot
@@ -73,7 +74,7 @@ static func _array_fields() -> PackedStringArray:
 	return PackedStringArray(["id", "alive", "species", "sex", "x", "y", "prev_x", "prev_y", "birth_tick",
 		"death_age", "health", "max_health", "hunger", "state", "task", "task_target", "task_timer", "job",
 		"city", "home", "mother", "father", "carry_type", "carry_amount", "next_think", "last_birth_tick",
-		"flags", "kills", "look", "name", "path_pos", "disease"])
+		"flags", "kills", "look", "name", "path_pos", "disease", "traits"])
 
 
 ## Fields that are logically authoritative (prev_x/prev_y excluded).
@@ -127,6 +128,7 @@ func allocate() -> int:
 	name[s] = ""
 	path_pos[s] = 0
 	disease[s] = 0
+	traits[s] = 0
 	return s
 
 

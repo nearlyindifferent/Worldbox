@@ -88,6 +88,9 @@ func update_view(view_rect_tiles: Rect2, zoom: float, delta: float) -> void:
 			if u.carry_amount[s] > 0.0:
 				var cf := AssetForge.UF.CARRY_FOOD + u.carry_type[s] - 1
 				_items.add(pos + CARRY_OFFSET * scale_f, scale_f, Color.WHITE, cf, 0, 0, 0)
+		elif u.species[s] == sim.wolf_species:
+			var hunting := u.task[s] == UnitStore.Task.HUNT
+			frame = AssetForge.UF.WOLF_A + ((step * (2 if hunting else 1) + s) % 2 if moving else 0)
 		else:
 			frame = AssetForge.UF.SHEEP_EAT if working else (AssetForge.UF.SHEEP_A + ((step + s) % 2 if moving else 0))
 			gb = (look >> 8) % 3

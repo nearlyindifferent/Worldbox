@@ -27,7 +27,7 @@ const MAT_COLORS := {
 
 ## Unit atlas frame indices.
 enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW,
-	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK }
+	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK, WOLF_A, WOLF_B, WOLF_EAT }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
 enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D }
@@ -358,6 +358,32 @@ static func _draw_unit_frame(img: Image, f: int, ox: int, oy: int) -> void:
 				for y in range(0, 7):
 					_m(img, x0 + 5, oy + y, Mat.WOOD_LIGHT)
 				_m(img, x0 + 5, oy - 1 + 1, Mat.WHITE, 110)
+		UF.WOLF_A, UF.WOLF_B, UF.WOLF_EAT:
+			var bite := f == UF.WOLF_EAT
+			# Tail
+			_m(img, ox + 0, oy + 3, Mat.STONE, 150)
+			_m(img, ox + 1, oy + 4, Mat.STONE, 120)
+			# Body
+			for x in range(1, 6):
+				_m(img, ox + x, oy + 4, Mat.STONE, 140 if x < 4 else 128)
+				_m(img, ox + x, oy + 5, Mat.STONE_SHADE, 128)
+			_m(img, ox + 2, oy + 5, Mat.STONE, 105)
+			# Head, ears, snout
+			var hy := 5 if bite else 3
+			_m(img, ox + 5, oy + hy, Mat.STONE, 140)
+			_m(img, ox + 6, oy + hy, Mat.STONE, 128)
+			_m(img, ox + 7, oy + hy + 1, Mat.OUTLINE)
+			_m(img, ox + 6, oy + hy + 1, Mat.STONE_SHADE)
+			_m(img, ox + 5, oy + hy - 1, Mat.OUTLINE, 110)
+			_m(img, ox + 6, oy + hy, Mat.FACE if not bite else Mat.STONE, 128)
+			if not bite:
+				_m(img, ox + 5, oy + 4, Mat.STONE, 128)
+			# Legs
+			var stride := f == UF.WOLF_B
+			_m(img, ox + (1 if stride else 2), oy + 6, Mat.OUTLINE)
+			_m(img, ox + 2, oy + 6 + (0 if stride else 0), Mat.STONE_SHADE, 90)
+			_m(img, ox + (5 if stride else 4), oy + 6, Mat.OUTLINE)
+			_m(img, ox + (6 if stride else 5), oy + 6, Mat.STONE_SHADE, 90)
 		UF.SICK:
 			# Three green bubbles rising over a plague victim's head.
 			_m(img, ox + 3, oy + 6, Mat.SICK)
@@ -544,7 +570,7 @@ const ICON_IDS := ["inspect", "raise", "lower", "paint_grass", "paint_soil", "pa
 	"paint_ocean", "paint_deep", "paint_mountain", "paint_hills", "paint_forest", "paint_desert", "paint_snow",
 	"paint_swamp", "paint_ash", "paint_mystic", "spawn_human", "spawn_sheep", "smite", "bless", "undo",
 	"pause", "play", "fast", "faster", "fastest", "save", "load", "history", "admin", "close", "plus", "minus",
-	"fire", "rain", "meteor", "earthquake", "volcano", "plague",
+	"fire", "rain", "meteor", "earthquake", "volcano", "plague", "spawn_wolf",
 	"people", "city", "food", "wood", "stone", "house", "star", "skull", "heart", "perf", "world", "follow",
 	"incite_war", "forge_peace", "spark_rebellion", "crown", "kingdom"]
 
@@ -584,6 +610,9 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 		"spawn_sheep":
 			var u2 := build_unit_atlas_cached()
 			_blit_scaled_unit(img, u2, UF.SHEEP_A, ox, Color.WHITE)
+		"spawn_wolf":
+			var u4 := build_unit_atlas_cached()
+			_blit_scaled_unit(img, u4, UF.WOLF_A, ox, Color.WHITE)
 		"smite":
 			var pts := [Vector2i(9, 1), Vector2i(8, 2), Vector2i(7, 3), Vector2i(6, 4), Vector2i(5, 5), Vector2i(6, 6), Vector2i(7, 6), Vector2i(8, 6), Vector2i(7, 7), Vector2i(6, 8), Vector2i(5, 9), Vector2i(4, 10), Vector2i(3, 11), Vector2i(2, 12)]
 			for p: Vector2i in pts:

@@ -202,7 +202,7 @@ func _build_unit() -> void:
 	var tint := Color(AssetForge.NOMAD_CLOTHES)
 	if u.city[s] != SimConst.CITY_NONE and sim.cities.has(u.city[s]):
 		tint = Color(AssetForge.CITY_COLORS[(sim.cities[u.city[s]] as City).color_index])
-	var frame := AssetForge.UF.SHEEP_A if not def.sapient else (AssetForge.UF.WOMAN_IDLE if u.sex[s] == 1 else AssetForge.UF.MAN_IDLE)
+	var frame := (AssetForge.UF.WOLF_A if u.species[s] == sim.wolf_species else AssetForge.UF.SHEEP_A) if not def.sapient else (AssetForge.UF.WOMAN_IDLE if u.sex[s] == 1 else AssetForge.UF.MAN_IDLE)
 	var look := u.look[s]
 	portrait.texture = ImageTexture.create_from_image(AssetForge.unit_portrait(frame, tint, Color(AssetForge.SKINS[look & 3]), Color(AssetForge.HAIRS[(look >> 4) % 5]), Color(AssetForge.WOOLS[(look >> 8) % 3])))
 	var frame_bg := PanelContainer.new()
@@ -249,6 +249,16 @@ func _build_unit() -> void:
 	_bar("Hunger", "hunger", Color("#e0a040"))
 	_row("Doing", "task")
 	_row("Carrying", "carry")
+	_row("Illness", "sickness")
+	# Trait effects are spelled out inline: touch screens have no hover tooltips.
+	if Traits.count(u.traits[s]) == 0:
+		_row("Traits", "", "none")
+	else:
+		var first := true
+		for t in Traits.INFO.size():
+			if Traits.has(u.traits[s], t):
+				_row("Traits" if first else "", "", "%s - %s" % [Traits.INFO[t]["name"], Traits.INFO[t]["desc"]])
+				first = false
 	if def.sapient:
 		_section("Society")
 		_row("Job", "job")
@@ -323,6 +333,12 @@ func _refresh_unit() -> void:
 	_set_text("carry", "nothing" if u.carry_amount[s] <= 0.0 else "%.1f %s" % [u.carry_amount[s], UnitStore.RESOURCE_NAMES[u.carry_type[s]]])
 	_set_text("job", Defs.jobs[u.job[s]].name if age >= def.adult_age else "child")
 	_set_text("kills", str(u.kills[s]))
+	var sick := "healthy"
+	if u.disease[s] > 0:
+		sick = "sick with plague (%d days left)" % ceili(u.disease[s] / float(SimConst.TICKS_PER_MONTH) * 30.0)
+	elif u.has_flag(s, UnitStore.Flag.IMMUNE):
+		sick = "healthy, immune to plague"
+	_set_text("sickness", sick)
 
 
 func _show_deceased(uid: int) -> void:

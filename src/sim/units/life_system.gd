@@ -47,6 +47,8 @@ func update_all() -> void:
 	var seek: int = UnitStore.Task.SEEK_LAND
 	var idle: int = UnitStore.State.IDLE
 	var disease := u.disease
+	var traits := u.traits
+	var hardy_bit := 1 << Traits.HARDY
 	var lava_b := Defs.biome_index("lava")
 	var dead_slots := PackedInt32Array()
 	var dead_causes := PackedStringArray()
@@ -58,7 +60,7 @@ func update_all() -> void:
 		var invulnerable := (flags[s] & invuln_bit) != 0
 		var h := hunger[s]
 		if hunger_on:
-			h += rates[species[s]]
+			h += rates[species[s]] * (0.75 if (traits[s] & hardy_bit) != 0 else 1.0)
 			if h >= SimConst.HUNGER_MAX:
 				h = SimConst.HUNGER_MAX
 				if not invulnerable:

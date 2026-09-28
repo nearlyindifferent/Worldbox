@@ -8,7 +8,7 @@ var _filter := OptionButton.new()
 var _timer := 0.0
 var _last_total := -1
 var _entries: Array[Dictionary] = []
-const FILTERS := ["Notable events", "Everything", "Major only", "Settlements", "Leaders", "Hardship", "War & politics"]
+const FILTERS := ["Notable events", "Everything", "Major only", "Settlements", "Leaders", "Hardship", "War & politics", "Disasters & gods"]
 
 
 func _ready() -> void:
@@ -71,6 +71,8 @@ func _process(delta: float) -> void:
 		if mode == 5 and not (k in [HistoryLog.Kind.FAMINE, HistoryLog.Kind.DISASTER, HistoryLog.Kind.CITY_ABANDONED]):
 			continue
 		if mode == 6 and not (k in [HistoryLog.Kind.KINGDOM_FOUNDED, HistoryLog.Kind.WAR_DECLARED, HistoryLog.Kind.PEACE, HistoryLog.Kind.CITY_CONQUERED, HistoryLog.Kind.REBELLION, HistoryLog.Kind.KINGDOM_FALLEN]):
+			continue
+		if mode == 7 and not (k in [HistoryLog.Kind.DISASTER, HistoryLog.Kind.GOD_ACT]):
 			continue
 		var idx := _list.add_item("%s  %s" % [_short_date(int(e["tick"])), e["text"]])
 		if k in HistoryLog.MAJOR:

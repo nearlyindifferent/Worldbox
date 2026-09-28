@@ -28,6 +28,16 @@
       "local_density_cap": 12, "meat_food": 4,
       "walkable": "land", "sprite": "quadruped",
       "palette": {"wool": ["#e8e4d8", "#d4ccb8", "#f4f0e8"], "face": ["#3a302a", "#5a4838"]}
+    },
+    {
+      "id": "wolf", "index": 2, "name": "Wolves", "sapient": false,
+      "diet": "carnivore", "speed": 0.21, "max_health": 45, "damage": 7,
+      "lifespan": [8, 13], "adult_age": 1, "fertile_age": [1, 9],
+      "hunger_rate": 0.16, "meal_hunger": 75, "hunt_hunger": 30, "hunt_radius": 16,
+      "prey": ["sheep"], "desperate_hunger": 85,
+      "birth_chance_per_month": 0.06, "birth_cooldown_years": 1.0, "litter": [1, 2],
+      "local_density_cap": 9, "prey_per_birth": 6, "mate_radius": 20,
+      "walkable": "land", "sprite": "quadruped"
     }
   ]
 }

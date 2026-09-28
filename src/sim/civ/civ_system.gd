@@ -794,7 +794,7 @@ func _monthly(c: City) -> void:
 	for m in mothers:
 		if room <= 0:
 			break
-		if not sim.rng.chance(BIRTH_CHANCE):
+		if not sim.rng.chance(BIRTH_CHANCE * (1.5 if Traits.has(u.traits[m], Traits.FERTILE) else 1.0)):
 			continue
 		var f: int = fathers[sim.rng.randi_range(0, fathers.size() - 1)]
 		var child := sim.spawn_unit(sim.human_species, u.x[m], u.y[m], 0.0, u.id[m], u.id[f])
