@@ -101,6 +101,18 @@ If the last storage building is destroyed and people remain, they raise a new to
 - Plague lasts 150 ticks: 0.7 health/tick × frailty (0.4–1.6 by person, ×1.6 sickly, ×0.6 with a temple); spreads every 6 ticks to same-species creatures within 1.6 tiles (12 %, ×0.6 with a temple); survivors become immune.
 - Natural events (law `natural_disasters`): lightning fires in months 6–9 on dry unsettled grass/forest (6 %/month scaled by world area); plague outbreaks as a rare world event (0.6 %/month, weighted toward large towns).
 
+## World ages (`AgeSystem`, monthly; law `world_ages`)
+Each age lasts 20–40 years; the next is drawn at random (never the same twice) and chronicled. Multipliers: crop and grass growth, natural wildfire odds, natural plague odds, an opinion shift between all realms ("restless times"), and a monthly natural earthquake chance.
+| Age | Crops | Grass | Fire | Plague | Relations | Quakes |
+|---|---|---|---|---|---|---|
+| The Quiet Years | 1.0 | 1.0 | 1.0 | 1.0 | 0 | 0 |
+| The Green Years | 1.3 | 1.3 | 0.4 | 1.0 | 0 | 0 |
+| The Long Winter | 0.6 | 0.6 | 0.3 | 1.2 | 0 | 0 |
+| The Ember Years | 0.85 | 0.8 | 3.0 | 1.0 | 0 | 0 |
+| The Restless Years | 1.0 | 1.0 | 1.0 | 1.0 | −10 | 3 %/month |
+| The Pale Years | 0.95 | 1.0 | 1.0 | 4.0 | 0 | 0 |
+The Turn of Ages power (and admin op `set_world_age`) starts the next age at once. Presentation tints the land per age and dusts it with snow in the Long Winter.
+
 ## Traits (`Traits`)
 Up to 3 per creature from 11: strong (+30 % health, +25 % battle damage), swift (+20 % speed), hardy (−25 % hunger), long-lived (+20 % lifespan), sickly (plague ×1.6, −15 % lifespan), wise (as leader: +15 % food yields), warlike, just, greedy (as ruler), fertile (×1.5 births), brave (does not flee enemy soldiers). Animals only get physical traits. First generations roll each trait at 8 %; children inherit a trait carried by one parent at 45 %, by both at 75 %, with a 4 % mutation.
 
@@ -114,7 +126,7 @@ Walkable tiles are labelled into 4-connected landmass components (`Pathfinder.re
 Brush radius is clamped to 16 by the simulation. Terrain brushes record undo per stroke. Changing a tile's walkability updates A*; making a building's tile unwalkable destroys it; destroying the last storage abandons the city. Spawn powers need land within 4 tiles. Smite kills non-invulnerable units in the brush; Blessing heals and feeds.
 
 ## Laws
-`hunger`, `natural_death`, `reproduction`, `animal_reproduction`, `vegetation_growth`, `forest_spread`, `settlement_founding`, `construction`, `diplomacy`, `wars`, `rebellions`, `natural_disasters` — read every tick; toggles take effect immediately.
+`hunger`, `natural_death`, `reproduction`, `animal_reproduction`, `vegetation_growth`, `forest_spread`, `settlement_founding`, `construction`, `diplomacy`, `wars`, `rebellions`, `natural_disasters`, `world_ages` — read every tick; toggles take effect immediately.
 
 ## Observability
 - `HistoryLog`: major events kept; minor events capped at 4000.

@@ -4,7 +4,7 @@ extends RefCounted
 ## advances it in fixed ticks. Contains no rendering or UI code and never reads
 ## frame time, so the same seed + command stream reproduces the same world.
 
-const SAVE_SCHEMA := 5
+const SAVE_SCHEMA := 6
 
 var seed_value: int = 0
 var shape: String = "island"
@@ -51,6 +51,7 @@ var fx_events: Array[Dictionary] = []
 const FX_CAP := 256
 var vegetation: VegetationSystem
 var disasters: DisasterSystem
+var ages: AgeSystem
 var editor: TerrainEditor
 var timings: Dictionary = {}    ## system -> smoothed microseconds per tick
 var last_tick_usec: int = 0
@@ -89,6 +90,7 @@ func _init_systems() -> void:
 	realm = KingdomSystem.new(self)
 	vegetation = VegetationSystem.new(self)
 	disasters = DisasterSystem.new(self)
+	ages = AgeSystem.new(self)
 	editor = TerrainEditor.new(self)
 	for n in ["population", "humans", "animals", "cities", "food", "births", "deaths", "sheep", "wolves", "kingdoms", "sick"]:
 		if not stats.has(n):
@@ -217,6 +219,7 @@ func step() -> void:
 		_time("kingdoms", t)
 		t = Time.get_ticks_usec()
 		animal_ai.monthly_reproduction()
+		ages.monthly()
 		disasters.monthly()
 		_sample_stats()
 		_time("monthly", t)
@@ -376,6 +379,7 @@ func dispose() -> void:
 	realm = null
 	vegetation = null
 	disasters = null
+	ages = null
 	editor = null
 	pathfinder = null
 	spatial = null
@@ -502,6 +506,7 @@ func to_dict() -> Dictionary:
 		"components": pathfinder.components_to_dict(),
 		"undo": editor.undo_stack.duplicate(true),
 		"disasters": disasters.to_dict(),
+		"ages": ages.to_dict(),
 	}
 
 
@@ -552,6 +557,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim.pathfinder.components_from_dict(d["components"])
 	sim.editor.undo_stack.assign(d["undo"])
 	sim.disasters.from_dict(d["disasters"])
+	sim.ages.from_dict(d["ages"])
 	return sim
 
 

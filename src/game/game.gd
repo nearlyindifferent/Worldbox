@@ -384,7 +384,8 @@ func _on_left_press() -> void:
 		return
 	if Powers.effect_kind(power) == "diplomacy":
 		var r := sim.apply_command({"op": "brush", "power": power, "x": t.x, "y": t.y, "radius": 0})
-		toast.emit(str(r["msg"]), r["ok"])
+		if power != "turn_age":
+			toast.emit(str(r["msg"]), r["ok"])
 		return
 	sim.apply_command({"op": "stroke_begin"})
 	_stroke_active = true
@@ -406,6 +407,11 @@ func _drain_sim_fx() -> void:
 	var w := sim.world.width
 	var vr := camera.visible_tiles_rect().grow(4)
 	for e: Dictionary in sim.fx_events:
+		if str(e["kind"]) == "age":
+			var ag: Dictionary = AgeSystem.AGES[int(e["age"])]
+			toast.emit("%s began. %s" % [ag["name"], ag["desc"]], true)
+			sounds.play("horn", 1.25)
+			continue
 		var t := int(e["tile"])
 		var tile := Vector2i(t % w, t / w)
 		var kind := str(e["kind"])

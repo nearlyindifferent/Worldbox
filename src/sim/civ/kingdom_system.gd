@@ -360,6 +360,10 @@ func _update_relations() -> void:
 				if maxi(sa, sb) >= 8 and float(maxi(sa, sb)) / maxf(1.0, mini(sa, sb)) >= COVET_RATIO:
 					reasons.append(["coveted land", COVET_OPINION])
 					total += COVET_OPINION
+			var strife := sim.ages.factor("strife")
+			if strife != 0.0:
+				reasons.append(["restless times", strife])
+				total += strife
 			if a.parent == b.id or b.parent == a.id:
 				reasons.append(["shared origin", 12.0])
 				total += 12.0

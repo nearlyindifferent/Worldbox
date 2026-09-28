@@ -8,7 +8,7 @@ extends RefCounted
 ##      (tests/unit/test_save_fixtures.gd fails if to_dict changes without a bump).
 
 ## from_schema -> method name that upgrades a dict from that schema to from_schema+1
-const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4", 4: "_v4_to_v5"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4", 4: "_v4_to_v5", 5: "_v5_to_v6"}
 
 
 static func migrate(d: Dictionary) -> Dictionary:
@@ -99,4 +99,11 @@ static func _v4_to_v5(d: Dictionary) -> Dictionary:
 			c["joined_tick"] = int(c.get("founded_tick", 0))
 		if not c.has("last_famine_tick"):
 			c["last_famine_tick"] = -1000000
+	return d
+
+
+## Schema 6 added world ages; older worlds start in the Quiet Years.
+static func _v5_to_v6(d: Dictionary) -> Dictionary:
+	var t := int(d.get("tick", 0))
+	d["ages"] = {"current": 0, "since": t, "until": t + AgeSystem.MIN_YEARS * SimConst.TICKS_PER_YEAR}
 	return d

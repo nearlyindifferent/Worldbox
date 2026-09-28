@@ -7,7 +7,7 @@ const CATEGORIES := [
 	{"id": "inspect", "name": "Inspect", "icon": "inspect", "powers": ["inspect"]},
 	{"id": "terrain", "name": "Terrain", "icon": "raise", "powers": ["raise", "lower", "paint_grass", "paint_soil", "paint_sand", "paint_forest", "paint_hills", "paint_mountain", "paint_snow", "paint_desert", "paint_swamp", "paint_ash", "paint_mystic", "paint_shallow", "paint_ocean", "paint_deep"]},
 	{"id": "life", "name": "Life", "icon": "spawn_human", "powers": ["spawn_human", "spawn_sheep", "spawn_wolf"]},
-	{"id": "divine", "name": "Divine", "icon": "smite", "powers": ["smite", "bless"]},
+	{"id": "divine", "name": "Divine", "icon": "smite", "powers": ["smite", "bless", "turn_age"]},
 	{"id": "disasters", "name": "Disasters", "icon": "fire", "powers": ["fire", "rain", "meteor", "earthquake", "volcano", "plague"]},
 	{"id": "diplomacy", "name": "Diplomacy", "icon": "crown", "powers": ["incite_war", "forge_peace", "spark_rebellion"]},
 ]
@@ -35,6 +35,7 @@ const DEFS := {
 	"spawn_wolf": {"name": "Wolves", "desc": "Release a wolf pack. Wolves hunt woolbacks and, when starving, lone travellers.", "brush": true, "repeat": 0.3},
 	"smite": {"name": "Smite", "desc": "Strike every creature under the brush with lightning.", "brush": true, "repeat": 0.3},
 	"bless": {"name": "Blessing", "desc": "Fully heal and feed every creature under the brush.", "brush": true, "repeat": 0.3},
+	"turn_age": {"name": "Turn of Ages", "desc": "Tap anywhere: the current age ends and the next begins at once.", "brush": false, "repeat": 0.0},
 	"fire": {"name": "Wildfire", "desc": "Set the land ablaze. Forests burn fiercely, grass less so; flames leave scorched ground that slowly regrows.", "brush": true, "repeat": 0.2},
 	"rain": {"name": "Rain", "desc": "Douse fires, cool lava and green the land under the brush.", "brush": true, "repeat": 0.15},
 	"meteor": {"name": "Meteor", "desc": "Call down a falling star. Leaves a smoking crater of lava.", "brush": true, "repeat": 0.8},
@@ -63,7 +64,7 @@ static func effect_kind(power: String) -> String:
 		return "bless"
 	if power.begins_with("spawn"):
 		return "spawn"
-	if power in ["incite_war", "forge_peace", "spark_rebellion"]:
+	if power in ["incite_war", "forge_peace", "spark_rebellion", "turn_age"]:
 		return "diplomacy"
 	if power in ["fire", "rain", "meteor", "earthquake", "volcano", "plague"]:
 		return "disaster"

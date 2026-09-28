@@ -108,13 +108,13 @@ func monthly() -> void:
 	# Lightning fires only in the dry season (months 6-9), and only in dry country.
 	var scale := float(sim.world.size) / 65536.0
 	var dry_season := sim.month() >= 6 and sim.month() <= 9
-	if dry_season and sim.rng.chance(minf(0.5, NATURAL_FIRE_CHANCE * scale)):
+	if dry_season and sim.rng.chance(minf(0.5, NATURAL_FIRE_CHANCE * scale * sim.ages.factor("fire"))):
 		var i := _dry_fuel_tile()
 		if i >= 0:
 			ignite(i)
 			record("wildfire", HistoryLog.Kind.DISASTER, "Lightning set the land ablaze near %s." % place_name(i), i)
 	# Plague is a rare world event that strikes a crowded town (bigger towns are likelier).
-	if sim.rng.chance(NATURAL_PLAGUE_CHANCE):
+	if sim.rng.chance(NATURAL_PLAGUE_CHANCE * sim.ages.factor("plague")):
 		var total := 0
 		for c: City in sim.cities.values():
 			if c.population() >= PLAGUE_MIN_POP:

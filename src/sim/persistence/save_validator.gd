@@ -35,7 +35,7 @@ const TOP_KEYS := {
 	"decisions": TYPE_DICTIONARY, "stats": TYPE_DICTIONARY, "month_births": TYPE_INT, "month_deaths": TYPE_INT,
 	"deaths_by_cause": TYPE_DICTIONARY, "total_births": TYPE_INT, "total_deaths": TYPE_INT, "deceased": TYPE_DICTIONARY,
 	"pop_milestone": TYPE_INT, "civ_state": TYPE_DICTIONARY, "components": TYPE_DICTIONARY, "undo": TYPE_ARRAY,
-	"kingdoms": TYPE_ARRAY, "next_kingdom_id": TYPE_INT, "realm": TYPE_DICTIONARY, "disasters": TYPE_DICTIONARY,
+	"kingdoms": TYPE_ARRAY, "next_kingdom_id": TYPE_INT, "realm": TYPE_DICTIONARY, "disasters": TYPE_DICTIONARY, "ages": TYPE_DICTIONARY,
 }
 
 
@@ -59,6 +59,12 @@ static func validate(d: Dictionary) -> String:
 	err = _disasters(d["disasters"], size, int(wd["w"]), int(wd["h"]))
 	if err != "":
 		return err
+	var ag: Dictionary = d["ages"]
+	for k: String in ["current", "since", "until"]:
+		if typeof(ag.get(k)) != TYPE_INT:
+			return "ages.%s missing" % k
+	if int(ag["current"]) < 0 or int(ag["current"]) >= AgeSystem.AGES.size() or int(ag["until"]) < int(ag["since"]):
+		return "ages data invalid"
 	if (d["cities"] as Array).size() > MAX_CITIES or (d["buildings"] as Array).size() > MAX_BUILDINGS:
 		return "too many cities/buildings"
 	for c: Variant in d["cities"]:

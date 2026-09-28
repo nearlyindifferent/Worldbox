@@ -646,7 +646,7 @@ const ICON_IDS := ["inspect", "raise", "lower", "paint_grass", "paint_soil", "pa
 	"paint_ocean", "paint_deep", "paint_mountain", "paint_hills", "paint_forest", "paint_desert", "paint_snow",
 	"paint_swamp", "paint_ash", "paint_mystic", "spawn_human", "spawn_sheep", "smite", "bless", "undo",
 	"pause", "play", "fast", "faster", "fastest", "save", "load", "history", "admin", "close", "plus", "minus",
-	"fire", "rain", "meteor", "earthquake", "volcano", "plague", "spawn_wolf",
+	"fire", "rain", "meteor", "earthquake", "volcano", "plague", "spawn_wolf", "turn_age",
 	"people", "city", "food", "wood", "stone", "house", "star", "skull", "heart", "perf", "world", "follow",
 	"incite_war", "forge_peace", "spark_rebellion", "crown", "kingdom"]
 
@@ -808,6 +808,14 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 			_px(img, ox + 4, 7, Color("#e05a4a"))
 			_px(img, ox + 7, 7, Color("#3c6ec8"))
 			_px(img, ox + 10, 7, Color("#3ca05a"))
+		"turn_age":
+			_circle(img, ox + 8, 8, 6, gold, false)
+			_circle(img, ox + 8, 8, 5, Color("#3a2e24"), true)
+			for k in 8:
+				var a := k * TAU / 8.0
+				_px(img, ox + 8 + int(round(cos(a) * 6)), 8 + int(round(sin(a) * 6)), paper)
+			_rect(img, ox + 7, 4, 2, 5, paper)
+			_rect(img, ox + 8, 8, 4, 1, gold)
 		"fire":
 			_pattern(img, ox + 3, 1, ["....#.....", "....##....", "...###..#.", "..####.##.", ".########.", ".#########", "##########", "##########", ".########.", "..######.."], Color("#e0501c"))
 			_pattern(img, ox + 5, 5, ["..#...", ".###..", ".####.", "######", ".####."], Color("#f7a531"))

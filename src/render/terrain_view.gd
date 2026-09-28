@@ -24,6 +24,8 @@ var _seen := PackedInt32Array()
 var _timer := 0.0
 var _overlay_timer := 0.0
 var _anim := 0.0
+var _tint := Color.WHITE
+var _snow := 0.0
 var chunks_updated_total: int = 0
 
 
@@ -78,6 +80,13 @@ func _process(delta: float) -> void:
 		return
 	_anim += delta
 	_mat.set_shader_parameter("anim_time", _anim)
+	# The land's colour drifts toward the current age's tint over a few seconds.
+	var target: Color = sim.ages.age()["tint"] if sim.laws.is_on("world_ages") else Color.WHITE
+	_tint = _tint.lerp(target, clampf(delta * 0.5, 0.0, 1.0))
+	_mat.set_shader_parameter("age_tint", Vector3(_tint.r, _tint.g, _tint.b))
+	var snow_target := 1.0 if sim.laws.is_on("world_ages") and sim.ages.age()["id"] == "winter" else 0.0
+	_snow = move_toward(_snow, snow_target, delta * 0.25)
+	_mat.set_shader_parameter("age_snow", _snow)
 	_timer += delta
 	if _timer >= REFRESH_SEC:
 		_timer = 0.0

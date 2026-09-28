@@ -15,6 +15,7 @@ const DEFAULTS := {
 	"wars": true,
 	"rebellions": true,
 	"natural_disasters": true,
+	"world_ages": true,
 }
 const DESCRIPTIONS := {
 	"hunger": "Creatures grow hungry and starve without food.",
@@ -29,6 +30,7 @@ const DESCRIPTIONS := {
 	"wars": "Kingdoms may declare war.",
 	"rebellions": "Disloyal cities may rise up and break away.",
 	"natural_disasters": "Lightning wildfires and plague outbreaks happen on their own.",
+	"world_ages": "Long eras shift harvests, fires, plague and strife.",
 }
 
 var values: Dictionary = DEFAULTS.duplicate()

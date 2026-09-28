@@ -153,6 +153,12 @@ static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 				return _coup(sim, rc)
 			var nk := sim.realm.rebel(rc, [["cause", "stirred up by the gods"]])
 			return _ok("%s rebelled" % rc.name, {"kingdom": nk.id}) if nk != null else _fail("This town cannot rebel")
+		"set_world_age":
+			var idx := AgeSystem.index_of(str(cmd.get("age", "")))
+			if idx < 0:
+				idx = (sim.ages.current + 1) % AgeSystem.AGES.size()
+			sim.ages.begin(idx, "the gods turned the wheel")
+			return _ok(str(AgeSystem.AGES[idx]["name"]) + " began")
 		"set_leader":
 			var c: City = sim.cities.get(int(cmd["city"]), null)
 			var s := _slot(sim, cmd)
@@ -224,6 +230,8 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 		"plague":
 			var sick := sim.disasters.plague_power(x, y, r)
 			return _ok("", {"infected": sick}) if sick > 0 else _fail("No one here can catch the plague")
+		"turn_age":
+			return execute(sim, {"op": "set_world_age"})
 		"incite_war", "forge_peace", "spark_rebellion":
 			var i := sim.world.idx(clampi(x, 0, sim.world.width - 1), clampi(y, 0, sim.world.height - 1))
 			var c: City = sim.cities.get(sim.world.owner[i], null)

@@ -43,6 +43,8 @@ func update() -> void:
 	var forest := Defs.forest_index
 	var forest_wood: int = (Defs.biomes[forest] as Defs.BiomeDef).wood
 	var scorched := Defs.biome_index("scorched")
+	var crop_f := sim.ages.factor("crop")
+	var veg_f := sim.ages.factor("veg")
 	for c in range(phase, n_chunks, SimConst.VEG_CYCLE_TICKS):
 		var x0 := (c % w.chunks_x) * SimConst.CHUNK
 		var y0 := (c / w.chunks_x) * SimConst.CHUNK
@@ -63,7 +65,7 @@ func update() -> void:
 					var soil := w.wood[i]
 					if grow and v < 255:
 						var nutrient := 0.3 + 0.7 * float(soil) / SimConst.SOIL_MAX
-						var nv := mini(255, v + int(SimConst.CROP_GROWTH * (0.4 + 0.6 * w.moisture[i]) * nutrient))
+						var nv := mini(255, v + int(SimConst.CROP_GROWTH * crop_f * (0.4 + 0.6 * w.moisture[i]) * nutrient))
 						w.vegetation[i] = nv
 						changed = changed or (nv >> 6) != (v >> 6)
 					if soil < SimConst.SOIL_MAX:
@@ -71,7 +73,7 @@ func update() -> void:
 					continue
 				var vmax := Defs.biome_veg_max[b]
 				if grow and v < vmax:
-					var nv := mini(vmax, v + int(SimConst.VEG_GROWTH * w.fertility(i)) + 1)
+					var nv := mini(vmax, v + int(SimConst.VEG_GROWTH * veg_f * w.fertility(i)) + 1)
 					w.vegetation[i] = nv
 					changed = changed or (nv >> 6) != (v >> 6)
 				if b == scorched and w.vegetation[i] >= vmax:

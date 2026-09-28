@@ -211,6 +211,8 @@ func _step(st: Dictionary) -> void:
 		"new_world":
 			game.new_world(int(st.get("seed", 1)), st.get("size", "medium"), st.get("shape", "island"))
 			await _frames(3)
+		"world_age":
+			game.sim.apply_command({"op": "set_world_age", "age": str(st.get("id", "winter"))})
 		"print":
 			match str(st["what"]):
 				"perf":

@@ -21,6 +21,8 @@ uniform float overlay_alpha = 0.0;
 uniform bool show_chunks = false;
 uniform float chunk_size = 16.0;
 uniform float anim_time = 0.0;
+uniform vec3 age_tint = vec3(1.0);
+uniform float age_snow = 0.0;
 
 const float TILE_PX = 8.0;
 const vec3 DRY = vec3(0.62, 0.58, 0.30);
@@ -44,6 +46,17 @@ int realm_id(ivec2 p) {
 
 float hash12(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	float a = hash12(i);
+	float b = hash12(i + vec2(1.0, 0.0));
+	float c = hash12(i + vec2(0.0, 1.0));
+	float d = hash12(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
 void fragment() {
@@ -133,6 +146,15 @@ void fragment() {
 		if (px.y == 7 && is_water(texel_i(data_tex, t + ivec2(0, 1)).r)) c.rgb *= 0.62;
 		if (px.x == 0 && is_water(texel_i(data_tex, t + ivec2(-1, 0)).r)) c.rgb *= 0.8;
 		if (px.x == 7 && is_water(texel_i(data_tex, t + ivec2(1, 0)).r)) c.rgb *= 0.8;
+	}
+
+	c.rgb *= age_tint;
+	// Long winters dust open land with snow (more on higher ground).
+	if (age_snow > 0.01 && !is_water(b) && b != lava_index) {
+		float h = hash12(vec2(t) * 8.0 + vec2(px) + vec2(3.7, 1.3));
+		float patch = vnoise(wp / 7.0 + vec2(11.0, 7.0)) * 0.65 + vnoise(wp / 2.5) * 0.35;
+		float dens = 0.03 + smoothstep(0.45, 0.8, patch) * 0.5 + max(hs - 0.55, 0.0) * 0.5;
+		if (h < age_snow * dens) c.rgb = mix(c.rgb, vec3(0.93, 0.96, 1.0), 0.8);
 	}
 
 	if (show_territory) {

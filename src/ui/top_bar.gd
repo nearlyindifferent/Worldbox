@@ -86,7 +86,7 @@ func _fit() -> void:
 	_title_sep.visible = _title.visible
 	_animal_icon.visible = not _narrow
 	_animals.visible = not _narrow
-	_date.custom_minimum_size = Vector2(130 if _narrow else 230, 0)
+	_date.custom_minimum_size = Vector2(130 if _narrow else 360, 0)
 	_timer = 1.0
 
 
@@ -108,6 +108,11 @@ func _process(delta: float) -> void:
 	var sim := game.sim
 	@warning_ignore("integer_division")
 	_date.text = ("Y%d  M%d" % [sim.year(), sim.month()]) if _narrow else sim.date_string()
+	if sim.laws.is_on("world_ages"):
+		var ag: Dictionary = sim.ages.age()
+		_date.tooltip_text = "%s: %s" % [ag["name"], ag["desc"]]
+		if not _narrow:
+			_date.text += "  -  " + str(ag["name"]).trim_prefix("The ")
 	var humans := sim.count_species(sim.human_species)
 	_pop.text = str(humans)
 	_cities.text = str(sim.cities.size())

@@ -1,0 +1,9 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "ticks", "n": 900},
+  {"do": "world_age", "id": "winter"},
+  {"do": "frames", "n": 400},
+  {"do": "power", "id": "turn_age"},
+  {"do": "frames", "n": 3},
+  {"do": "shot", "name": "age_bar"}
+]
