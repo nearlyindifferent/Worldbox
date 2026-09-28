@@ -24,6 +24,13 @@ func _ready() -> void:
 	var title := UiTheme.label("World Ledger", "TitleLabel")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
+	var help := Button.new()
+	help.text = "How to play"
+	help.focus_mode = Control.FOCUS_NONE
+	help.pressed.connect(func() -> void:
+		visible = false
+		game.show_welcome())
+	head.add_child(help)
 	var close := Button.new()
 	close.theme_type_variation = "ToolButton"
 	close.icon = UiTheme.icon("close")

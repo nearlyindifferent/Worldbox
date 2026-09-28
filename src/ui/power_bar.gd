@@ -12,6 +12,7 @@ var _power_buttons := {}
 var _category: String = "inspect"
 var _brush_label := Label.new()
 var _current := Label.new()
+var _desc := Label.new()
 var _brush_box := HBoxContainer.new()
 
 
@@ -59,6 +60,14 @@ func _ready() -> void:
 	_current.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_current.custom_minimum_size = Vector2(190, 0)
 	right.add_child(_current)
+	# The selected power's description, always visible (touch screens have no hover).
+	_desc.theme_type_variation = "MutedLabel"
+	_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_desc.custom_minimum_size = Vector2(280, 0)
+	_desc.max_lines_visible = 2
+	_desc.add_theme_font_size_override("font_size", 14)
+	_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	right.add_child(_desc)
 	_brush_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	_brush_box.add_child(UiTheme.label("Brush", "MutedLabel"))
 	_brush_box.add_child(_tool_button("minus", "Smaller brush  [ [ ]", func() -> void: game.set_brush_radius(game.brush_radius - 1)))
@@ -127,4 +136,5 @@ func _sync_buttons() -> void:
 		(_power_buttons[pid] as Button).set_pressed_no_signal(pid == game.power)
 	_brush_label.text = str(game.brush_radius)
 	_current.text = Powers.DEFS[game.power]["name"]
+	_desc.text = Powers.DEFS[game.power]["desc"]
 	_brush_box.modulate.a = 1.0 if Powers.DEFS[game.power]["brush"] else 0.45

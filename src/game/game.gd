@@ -17,7 +17,7 @@ const AUTOSAVE_YEARS := 10
 const MAX_BRUSH := 12
 
 ## Set before adding the scene to the tree to control startup (used by tools/tests).
-static var boot := {"seed": -1, "size": "medium", "shape": "island", "load": ""}
+static var boot := {"seed": -1, "size": "medium", "shape": "island", "load": "", "welcome": true}
 
 var sim: Simulation
 var saves := SaveManager.new()
@@ -82,6 +82,14 @@ func _ready() -> void:
 			new_world(_boot_seed(), boot["size"], boot["shape"])
 	else:
 		new_world(_boot_seed(), boot["size"], boot["shape"])
+	if bool(boot.get("welcome", false)) and not WelcomePanel.seen():
+		show_welcome()
+
+
+func show_welcome() -> void:
+	var wp := WelcomePanel.new()
+	wp.game = self
+	ui.add_child(wp)
 
 
 func _boot_seed() -> int:

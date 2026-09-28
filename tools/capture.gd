@@ -27,7 +27,7 @@ func _initialize() -> void:
 			args[a.substr(2, a.find("=") - 2)] = a.substr(a.find("=") + 1)
 	_out = args.get("out", _out)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out) if _out.begins_with("res://") else _out)
-	Game.boot = {"seed": int(args.get("seed", "7")), "size": args.get("size", "medium"), "shape": args.get("shape", "island"), "load": args.get("load", "")}
+	Game.boot = {"seed": int(args.get("seed", "7")), "size": args.get("size", "medium"), "shape": args.get("shape", "island"), "load": args.get("load", ""), "welcome": args.get("welcome", "0") == "1"}
 	var steps: Array = []
 	if args.has("steps"):
 		var v: Variant = JSON.parse_string(FileAccess.get_file_as_string(args["steps"]))

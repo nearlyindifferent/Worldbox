@@ -1,0 +1,7 @@
+[
+  {"do": "frames", "n": 10},
+  {"do": "shot", "name": "welcome"},
+  {"do": "power", "id": "meteor"},
+  {"do": "frames", "n": 5},
+  {"do": "shot", "name": "powerbar_desc"}
+]
