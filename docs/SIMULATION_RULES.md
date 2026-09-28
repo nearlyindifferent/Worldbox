@@ -60,6 +60,9 @@ On founding: 2×2 town hall (housing 4, storage), territory disk radius 5, found
 ### Colonisation (settlers)
 Monthly, a city with ≥ 28 people whose crowding (people ÷ housing, +0.3 if food is too short for births) is ≥ 0.9 has a 25 % chance — at most once per 4 years — to send up to 6 adults aged 14–40 (not the leader) plus their young children. The destination is the best of 10 sites 26–60 tiles away on the same landmass (score ≥ 80 % of the founding threshold). Settlers carry the SETTLER flag: they never re-join cities, walk to the site, found there if the rules allow, otherwise scout up to 4 times, then become ordinary nomads. Recorded as a MIGRATION history event and a settlement decision with its reasons.
 
+### Sea voyages
+If no good site exists on the town's own landmass, the town tries 12 random headings from its centre: walking out over land to the last shore tile, then over at least 3 tiles of open water (at most 90 tiles in total) to the first land of a *different* landmass. The best such crossing whose inland site (up to 4 tiles past the landing) scores ≥ 80 % of the founding threshold is chosen. Settlers and their children get a route in `CivSystem.voyages`, walk to the shore, sail straight to the landing (the SAILING flag lets them cross water without drowning or being blocked), then continue as settlers to the site. A route whose shore becomes unreachable is abandoned.
+
 ### Planning (every 30 ticks, staggered)
 1. Abandon if population is 0.
 2. Recompute housing and food capacity (60 + 80 per granary).
