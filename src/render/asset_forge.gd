@@ -30,8 +30,8 @@ enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, 
 	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK, WOLF_A, WOLF_B, WOLF_EAT }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
-enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D }
-const BLD_ATLAS_COLS := 8
+enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D, WATCHTOWER, FORGE, TEMPLE }
+const BLD_ATLAS_COLS := 12
 
 ## City banner colors (index = City.color_index). Hand-picked, distinct hues.
 const CITY_COLORS := ["#c8463c", "#3c6ec8", "#e0b43c", "#3ca05a", "#9a4cc0", "#e07a2c", "#2cb4b4", "#d85a9a",
@@ -410,7 +410,83 @@ static func build_building_atlas() -> Image:
 	_site(img, BF.FRAME * BLD_W, true)
 	_cottage(img, BF.HOUSE_C * BLD_W)
 	_longhouse(img, BF.HOUSE_D * BLD_W)
+	_watchtower(img, BF.WATCHTOWER * BLD_W)
+	_forge(img, BF.FORGE * BLD_W)
+	_temple(img, BF.TEMPLE * BLD_W)
 	return img
+
+
+## Tall stone tower with a crenellated top and a banner.
+static func _watchtower(img: Image, ox: int) -> void:
+	_rect_m(img, ox + 4, 6, 8, 17, Mat.STONE)
+	_rect_m(img, ox + 9, 6, 3, 17, Mat.STONE_SHADE)
+	for y in range(6, 23):
+		_m(img, ox + 3, y, Mat.OUTLINE)
+		_m(img, ox + 12, y, Mat.OUTLINE)
+	for x in range(3, 13):
+		_m(img, ox + x, 23, Mat.OUTLINE)
+	# Battlements
+	_rect_m(img, ox + 3, 3, 10, 3, Mat.STONE, 150)
+	for x in [4, 7, 10]:
+		_m(img, ox + x, 3, Mat.OUTLINE)
+	for x in range(3, 13):
+		_m(img, ox + x, 6, Mat.STONE_SHADE, 90)
+	for y in [10, 14, 18]:
+		for x in range(5, 11, 2):
+			_m(img, ox + x, y, Mat.STONE_SHADE)
+	_rect_m(img, ox + 7, 9, 2, 3, Mat.OUTLINE)
+	_rect_m(img, ox + 7, 18, 2, 5, Mat.WOOD)
+	for y in range(0, 4):
+		_m(img, ox + 11, y, Mat.WOOD)
+	_rect_m(img, ox + 12, 0, 3, 2, Mat.BANNER)
+
+
+## Low stone smithy with a chimney, glowing hearth and an anvil out front.
+static func _forge(img: Image, ox: int) -> void:
+	_rect_m(img, ox + 1, 14, 13, 9, Mat.STONE)
+	_rect_m(img, ox + 10, 14, 4, 9, Mat.STONE_SHADE)
+	for y in range(14, 23):
+		_m(img, ox + 0, y, Mat.OUTLINE)
+		_m(img, ox + 14, y, Mat.OUTLINE)
+	for x in range(0, 15):
+		_m(img, ox + x, 23, Mat.OUTLINE)
+	_roof(img, ox, 8, 13, 0, 14, 8)
+	# Chimney with smoke
+	_rect_m(img, ox + 11, 3, 2, 7, Mat.STONE_SHADE)
+	_m(img, ox + 11, 1, Mat.WHITE, 90)
+	_m(img, ox + 12, 0, Mat.WHITE, 70)
+	# Open hearth
+	_rect_m(img, ox + 3, 17, 4, 6, Mat.OUTLINE)
+	_rect_m(img, ox + 4, 19, 2, 3, Mat.EMBER)
+	_m(img, ox + 4, 18, Mat.WINDOW)
+	# Anvil
+	_rect_m(img, ox + 9, 20, 4, 1, Mat.STONE_SHADE, 70)
+	_m(img, ox + 10, 21, Mat.STONE_SHADE, 70)
+	_m(img, ox + 11, 22, Mat.STONE_SHADE, 70)
+
+
+## Pale stone temple with columns, steps and a golden spire.
+static func _temple(img: Image, ox: int) -> void:
+	_rect_m(img, ox + 1, 21, 14, 2, Mat.STONE, 150)
+	for x in range(0, 16):
+		_m(img, ox + x, 23, Mat.OUTLINE)
+	_rect_m(img, ox + 2, 12, 12, 9, Mat.WHITE, 110)
+	for x in [3, 6, 9, 12]:
+		for y in range(12, 21):
+			_m(img, ox + x, y, Mat.WHITE, 150)
+		_m(img, ox + x + 1, 20, Mat.STONE_SHADE)
+	_rect_m(img, ox + 7, 16, 2, 5, Mat.WOOD)
+	# Pediment
+	for r in 4:
+		for x in range(1 + r * 2, 15 - r * 2):
+			_m(img, ox + x, 11 - r, Mat.WHITE, 130 - r * 5)
+		_m(img, ox + r * 2, 11 - r, Mat.OUTLINE)
+		_m(img, ox + 15 - r * 2, 11 - r, Mat.OUTLINE)
+	# Spire
+	for y in range(2, 8):
+		_m(img, ox + 7, y, Mat.WINDOW, 120)
+		_m(img, ox + 8, y, Mat.WINDOW, 90)
+	_m(img, ox + 7, 1, Mat.WINDOW, 150)
 
 
 ## Stone cottage with a hipped roof, dormer and flower box.

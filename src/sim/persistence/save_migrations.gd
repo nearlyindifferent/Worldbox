@@ -8,7 +8,7 @@ extends RefCounted
 ##      (tests/unit/test_save_fixtures.gd fails if to_dict changes without a bump).
 
 ## from_schema -> method name that upgrades a dict from that schema to from_schema+1
-const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4", 4: "_v4_to_v5"}
 
 
 static func migrate(d: Dictionary) -> Dictionary:
@@ -73,10 +73,30 @@ static func _v3_to_v4(d: Dictionary) -> Dictionary:
 	var dis := PackedInt32Array()
 	dis.resize(int(ud.get("capacity", 0)))
 	ud["disease"] = dis
-	ud["traits"] = dis.duplicate()
 	d["disasters"] = {"burning": PackedInt32Array(), "fuel": PackedInt32Array(), "lava": PackedInt32Array(),
 		"lava_t": PackedInt32Array(), "lava_flow": PackedInt32Array(), "quakes": [], "last_record": {}}
 	for c: Dictionary in d["cities"]:
 		c["joined_tick"] = int(c.get("founded_tick", 0))
 		c["last_famine_tick"] = -1000000
+	return d
+
+
+## Schema 5 added heritable traits per unit. It also repairs saves from an early
+## schema-4 build (before disasters existed) that lack disaster and disease data.
+static func _v4_to_v5(d: Dictionary) -> Dictionary:
+	var ud: Dictionary = d["units"]
+	var cap := int(ud.get("capacity", 0))
+	var zeros := PackedInt32Array()
+	zeros.resize(cap)
+	if not ud.has("disease"):
+		ud["disease"] = zeros.duplicate()
+	ud["traits"] = zeros.duplicate()
+	if not d.has("disasters"):
+		d["disasters"] = {"burning": PackedInt32Array(), "fuel": PackedInt32Array(), "lava": PackedInt32Array(),
+			"lava_t": PackedInt32Array(), "lava_flow": PackedInt32Array(), "quakes": [], "last_record": {}}
+	for c: Dictionary in d["cities"]:
+		if not c.has("joined_tick"):
+			c["joined_tick"] = int(c.get("founded_tick", 0))
+		if not c.has("last_famine_tick"):
+			c["last_famine_tick"] = -1000000
 	return d

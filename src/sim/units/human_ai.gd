@@ -306,13 +306,18 @@ func _soldier(s: int, city: City) -> bool:
 	return false
 
 
-## Food yield multiplier from a wise town leader.
+## Food yield multiplier from a wise town leader and the forge's tools.
 func _leader_bonus(s: int) -> float:
 	var c: City = sim.cities.get(sim.units.city[s], null)
 	if c == null:
 		return 1.0
 	var ls := sim.units.slot_for(c.leader_id)
-	return 1.15 if ls >= 0 and Traits.has(sim.units.traits[ls], Traits.WISE) else 1.0
+	var m := 1.15 if ls >= 0 and Traits.has(sim.units.traits[ls], Traits.WISE) else 1.0
+	return m * _tool_bonus(c)
+
+
+func _tool_bonus(c: City) -> float:
+	return float(Defs.building_by_id("forge").raw.get("tool_yield", 1.1)) if c != null and sim.civ.has_building(c, "forge") else 1.0
 
 
 func _resolve_attack(s: int) -> void:
@@ -331,6 +336,9 @@ func _resolve_attack(s: int) -> void:
 	var dmg := float(Defs.job_by_id("soldier").raw.get("damage", 10.0)) * sim.rng.randf_range(0.7, 1.3)
 	if Traits.has(u.traits[s], Traits.STRONG):
 		dmg *= 1.25
+	var home: City = sim.cities.get(u.city[s], null)
+	if home != null and sim.civ.has_building(home, "forge"):
+		dmg *= float(Defs.building_by_id("forge").raw.get("soldier_damage", 1.3))
 	u.health[e] -= dmg
 	var et := int(u.y[e]) * sim.world.width + int(u.x[e])
 	sim.push_fx("hit", et)
@@ -512,7 +520,7 @@ func _on_work_done(s: int) -> void:
 			if w.wood[ti] < cost and w.biome[ti] == Defs.forest_index:
 				w.set_biome(ti, Defs.grassland_index)
 				sim.pathfinder.refresh_tile_cost(ti)
-			_receive(s, CARRY_WOOD, jd.yield_amount * float(took) / cost)
+			_receive(s, CARRY_WOOD, jd.yield_amount * float(took) / cost * _tool_bonus(sim.cities.get(u.city[s], null)))
 		UnitStore.Task.QUARRY:
 			_receive(s, CARRY_STONE, Defs.job_by_id("miner").yield_amount)
 		UnitStore.Task.BUILD:

@@ -42,5 +42,11 @@ static func _frame_for(b: Building) -> int:
 			return AssetForge.BF.TOWN_HALL
 		"granary":
 			return AssetForge.BF.GRANARY
+		"watchtower":
+			return AssetForge.BF.WATCHTOWER
+		"forge":
+			return AssetForge.BF.FORGE
+		"temple":
+			return AssetForge.BF.TEMPLE
 		_:
 			return [AssetForge.BF.HOUSE, AssetForge.BF.HOUSE_B, AssetForge.BF.HOUSE_C, AssetForge.BF.HOUSE_D][(b.id * 7 + b.x) % 4]

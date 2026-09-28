@@ -89,6 +89,25 @@ func test_schema3_golden_save_migrates_to_v4() -> void:
 	_cleanup(m)
 
 
+func test_schema4_saves_migrate_to_v5() -> void:
+	# Both schema-4 variants that were pushed: the web build's (with disasters)
+	# and an earlier one without disaster/disease data.
+	for fx: String in ["schema4_seed5_96.sav", "schema4early_seed5_96.sav"]:
+		var m := _mgr()
+		_cleanup(m)
+		_install_fixture(m, fx, "v4")
+		var r := m.load_slot("v4")
+		assert_true(r["ok"], "%s loads: %s" % [fx, r.get("msg", "")])
+		if not r["ok"]:
+			continue
+		var sim: Simulation = r["sim"]
+		assert_eq(sim.tick, 1500)
+		assert_no_violations(sim, "%s migrated" % fx)
+		run_ticks(sim, 300)
+		assert_no_violations(sim, "%s after 300 ticks" % fx)
+		_cleanup(m)
+
+
 func test_current_schema_golden_hash_is_stable() -> void:
 	# Fails if to_dict()/from_dict() change without a SAVE_SCHEMA bump + new fixture.
 	var info: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/schema%d_seed5_96.json" % Simulation.SAVE_SCHEMA))

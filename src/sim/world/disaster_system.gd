@@ -543,15 +543,27 @@ static func frailty(uid: int) -> float:
 	return 0.4 + float((uid * 2654435761) % 1000) / 1000.0 * 1.2
 
 
+## Plague multiplier for members of a city with a temple (healers), else 1.
+func _temple_factor(city_id: int, cache: Dictionary) -> float:
+	if city_id == SimConst.CITY_NONE:
+		return 1.0
+	if not cache.has(city_id):
+		var c: City = sim.cities.get(city_id, null)
+		cache[city_id] = float(Defs.building_by_id("temple").raw.get("plague_resist", 0.6)) if c != null and sim.civ.has_building(c, "temple") else 1.0
+	return cache[city_id]
+
+
 func _plague_spread() -> void:
 	var u := sim.units
 	var dead := PackedInt32Array()
 	var newly := PackedInt32Array()
+	var temples := {}
 	for s in u.capacity:
 		if u.alive[s] == 0 or u.disease[s] <= 0:
 			continue
 		u.disease[s] = maxi(0, u.disease[s] - PLAGUE_SPREAD_EVERY)
-		u.health[s] -= PLAGUE_DAMAGE * PLAGUE_SPREAD_EVERY * frailty(u.id[s]) * (1.6 if Traits.has(u.traits[s], Traits.SICKLY) else 1.0)
+		var care := _temple_factor(u.city[s], temples)
+		u.health[s] -= PLAGUE_DAMAGE * PLAGUE_SPREAD_EVERY * frailty(u.id[s]) * care * (1.6 if Traits.has(u.traits[s], Traits.SICKLY) else 1.0)
 		if u.health[s] <= 0.0:
 			dead.append(s)
 			continue
@@ -559,7 +571,7 @@ func _plague_spread() -> void:
 			u.set_flag(s, UnitStore.Flag.IMMUNE, true)
 			continue
 		for o in sim.spatial.query_radius(u, u.x[s], u.y[s], PLAGUE_SPREAD_RADIUS, u.species[s], 6):
-			if o != s and u.disease[o] == 0 and not u.has_flag(o, UnitStore.Flag.IMMUNE) and sim.rng.chance(PLAGUE_SPREAD_CHANCE):
+			if o != s and u.disease[o] == 0 and not u.has_flag(o, UnitStore.Flag.IMMUNE) and sim.rng.chance(PLAGUE_SPREAD_CHANCE * care):
 				newly.append(o)
 	for s in dead:
 		sim.kill_unit(s, "plague")

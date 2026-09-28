@@ -284,6 +284,8 @@ func _update_loyalty(k: Kingdom) -> void:
 			continue
 		var d := cp.distance_to(Vector2(c.center % w, c.center / w))
 		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4 + temper
+		if sim.civ.has_building(c, "temple"):
+			target += float(Defs.building_by_id("temple").raw.get("loyalty", 10))
 		c.loyalty = clampf(c.loyalty + (clampf(target, 0.0, 100.0) - c.loyalty) * 0.1, 0.0, 100.0)
 
 
@@ -493,6 +495,8 @@ func _sieges() -> void:
 				defenders += 1
 			elif foes.has(ok):
 				attackers[ok] = int(attackers.get(ok, 0)) + 1
+		# Watchtowers hold the walls like extra defenders.
+		defenders += sim.civ.count_complete(c, "watchtower") * int(Defs.building_by_id("watchtower").raw.get("defenders", 3))
 		if defenders > 0 or attackers.is_empty():
 			continue
 		var best := -1

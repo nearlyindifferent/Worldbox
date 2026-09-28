@@ -4,7 +4,7 @@ extends RefCounted
 ## advances it in fixed ticks. Contains no rendering or UI code and never reads
 ## frame time, so the same seed + command stream reproduces the same world.
 
-const SAVE_SCHEMA := 4
+const SAVE_SCHEMA := 5
 
 var seed_value: int = 0
 var shape: String = "island"

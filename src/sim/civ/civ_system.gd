@@ -541,6 +541,44 @@ func _plan_construction(c: City) -> void:
 	var granaries_allowed := c.population() / PEOPLE_PER_GRANARY + (1 if c.population() >= int(granary.raw.get("min_population", 14)) else 0)
 	if not civic_pending and granaries < granaries_allowed:
 		_start_project(c, granary.index)
+	elif not civic_pending:
+		_plan_stone_buildings(c)
+
+
+## Towns that have their granaries turn stone into civic buildings: a forge and a
+## temple once they are large enough, and watchtowers (first, when at war).
+func _plan_stone_buildings(c: City) -> void:
+	var at_war := c.kingdom >= 0 and sim.realm.is_at_war(c.kingdom)
+	var order := ["watchtower", "forge", "temple"] if at_war else ["forge", "temple", "watchtower"]
+	var pop := c.population()
+	for id: String in order:
+		var d := Defs.building_by_id(id)
+		if pop < int(d.raw.get("min_population", 999)):
+			continue
+		var per := int(d.raw.get("per_people", 0))
+		@warning_ignore("integer_division")
+		var allowed := maxi(1, pop / per) if per > 0 else 1
+		if _count_buildings(c, d.index) < allowed:
+			_start_project(c, d.index)
+			return
+
+
+## Completed buildings of type `id` in the city.
+func count_complete(c: City, id: String) -> int:
+	var n := 0
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if b.complete and b.def().id == id:
+			n += 1
+	return n
+
+
+func has_building(c: City, id: String) -> bool:
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if b.complete and b.def().id == id:
+			return true
+	return false
 
 
 ## Records (once per site) that construction is waiting on missing materials.
