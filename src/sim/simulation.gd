@@ -566,6 +566,8 @@ static func from_save(d: Dictionary) -> Dictionary:
 	if sim == null:
 		return {"ok": false, "msg": "Save rejected: could not rebuild world"}
 	var errs := SimInvariants.check(sim, 5)
+	if not SimInvariants.completed:
+		errs = PackedStringArray(["the consistency check could not finish"])
 	if errs.size() > 0:
 		return {"ok": false, "msg": "Save rejected: inconsistent world (%s)" % errs[0]}
 	return {"ok": true, "sim": sim}

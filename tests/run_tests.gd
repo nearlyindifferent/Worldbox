@@ -6,7 +6,11 @@ extends SceneTree
 ## skipped with --skip-slow.
 
 
+var _logger := ScriptErrorLogger.new()
+
+
 func _init() -> void:
+	OS.add_logger(_logger)
 	var args := OS.get_cmdline_user_args()
 	var skip_slow := args.has("--skip-slow")
 	var filters := PackedStringArray()
@@ -41,7 +45,10 @@ func _init() -> void:
 			var inst: TestCase = script.new()
 			inst.current_test = full
 			var t0 := Time.get_ticks_msec()
+			var errors_before := _logger.script_errors
 			inst.call(mname)
+			if _logger.script_errors > errors_before:
+				inst.fail("script error aborted the test: %s" % _logger.last_message)
 			var ms := Time.get_ticks_msec() - t0
 			total += 1
 			for n in inst.notes:

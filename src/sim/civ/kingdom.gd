@@ -24,6 +24,8 @@ func to_dict() -> Dictionary:
 
 static func from_dict(d: Dictionary) -> Kingdom:
 	var k := Kingdom.new()
+	var known := Kingdom.new().to_dict()
 	for key: String in d:
-		k.set(key, d[key])
+		if known.has(key):
+			k.set(key, d[key])
 	return k

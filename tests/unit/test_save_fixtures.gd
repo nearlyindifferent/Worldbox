@@ -151,6 +151,37 @@ func test_hostile_payloads_are_rejected_not_half_loaded() -> void:
 		ux[s] = 9999.0
 	(d6["units"] as Dictionary)["x"] = ux
 	cases["unit_out_of_world"] = d6
+	# Diplomacy and disaster payloads from the round-2 critic.
+	var war := Simulation.create_new(9, 64, 64, "island")
+	for k in 40:
+		war.step()
+	var ks := war.kingdoms.keys()
+	if ks.size() >= 2:
+		war.realm.declare_war(war.kingdoms[ks[0]], war.kingdoms[ks[1]], [])
+	var wbase := war.to_dict()
+	var d7 := wbase.duplicate(true)
+	((d7["realm"] as Dictionary)["pairs"] as Dictionary)["junk"] = {}
+	cases["junk_pair"] = d7
+	if ks.size() >= 2:
+		var d8 := wbase.duplicate(true)
+		for pk: String in (d8["realm"] as Dictionary)["pairs"]:
+			((d8["realm"] as Dictionary)["pairs"][pk] as Dictionary).erase("month_cas")
+		cases["pair_missing_fields"] = d8
+	var d9 := base.duplicate(true)
+	(d9["disasters"] as Dictionary)["quakes"] = [{"x": 5, "y": 5, "r": 8, "left": 1 << 40}]
+	cases["endless_quake"] = d9
+	var d10 := base.duplicate(true)
+	(d10["disasters"] as Dictionary)["burning"] = PackedInt32Array([100])
+	(d10["disasters"] as Dictionary)["fuel"] = PackedInt32Array([2147483647])
+	cases["endless_fire"] = d10
+	var d11 := base.duplicate(true)
+	var dis: PackedInt32Array = (d11["units"] as Dictionary)["disease"]
+	dis[0] = -5
+	(d11["units"] as Dictionary)["disease"] = dis
+	cases["negative_disease"] = d11
+	var d12 := wbase.duplicate(true)
+	((d12["kingdoms"] as Array)[0] as Dictionary)["exhaustion"] = NAN
+	cases["nan_exhaustion"] = d12
 	for name: String in cases:
 		DirAccess.make_dir_recursive_absolute(m.slot_dir(name))
 		_write_container(m.slot_dir(name).path_join("world.sav"), var_to_bytes(cases[name]))

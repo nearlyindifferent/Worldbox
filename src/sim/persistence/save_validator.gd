@@ -56,7 +56,7 @@ static func validate(d: Dictionary) -> String:
 	err = _units(d["units"], size, int(wd["w"]), int(wd["h"]))
 	if err != "":
 		return err
-	err = _disasters(d["disasters"], size)
+	err = _disasters(d["disasters"], size, int(wd["w"]), int(wd["h"]))
 	if err != "":
 		return err
 	if (d["cities"] as Array).size() > MAX_CITIES or (d["buildings"] as Array).size() > MAX_BUILDINGS:
@@ -77,8 +77,18 @@ static func validate(d: Dictionary) -> String:
 				return "kingdom.%s missing" % k
 		if typeof(kd.get("cities")) != TYPE_PACKED_INT32_ARRAY or int(kd["color_index"]) < 0 or int(kd["color_index"]) >= AssetForge.CITY_COLORS.size():
 			return "kingdom data invalid"
+		if typeof(kd.get("name")) != TYPE_STRING or not (typeof(kd.get("exhaustion")) in [TYPE_FLOAT, TYPE_INT]) or not is_finite(float(kd["exhaustion"])):
+			return "kingdom data invalid"
+		var seen_c := {}
+		for cid in kd["cities"]:
+			if seen_c.has(cid):
+				return "kingdom lists a city twice"
+			seen_c[cid] = true
 	if typeof((d["realm"] as Dictionary).get("pairs")) != TYPE_DICTIONARY:
 		return "diplomacy data missing"
+	err = _pairs((d["realm"] as Dictionary)["pairs"], d["kingdoms"])
+	if err != "":
+		return err
 	var comp: Dictionary = d["components"]
 	if typeof(comp.get("labels")) != TYPE_PACKED_INT32_ARRAY or not ((comp["labels"] as PackedInt32Array).size() in [0, size]):
 		return "bad component labels"
@@ -105,7 +115,40 @@ static func _world(wd: Dictionary) -> String:
 	return ""
 
 
-static func _disasters(dd: Dictionary, world_size: int) -> String:
+## Every diplomatic record must be well formed and refer to two living kingdoms.
+static func _pairs(pairs: Dictionary, kingdoms: Array) -> String:
+	var ids := {}
+	for kd: Dictionary in kingdoms:
+		ids[int(kd["id"])] = true
+	for key: Variant in pairs:
+		var p: Variant = pairs[key]
+		if typeof(key) != TYPE_STRING or typeof(p) != TYPE_DICTIONARY:
+			return "diplomacy record invalid"
+		for k: String in ["a", "b", "war_start", "last_peace"]:
+			if typeof((p as Dictionary).get(k)) != TYPE_INT:
+				return "diplomacy record missing %s" % k
+		for k: String in ["opinion", "grievance"]:
+			if not (typeof((p as Dictionary).get(k)) in [TYPE_FLOAT, TYPE_INT]) or not is_finite(float(p[k])):
+				return "diplomacy record missing %s" % k
+		if typeof((p as Dictionary).get("war")) != TYPE_BOOL or typeof((p as Dictionary).get("reasons")) != TYPE_ARRAY:
+			return "diplomacy record invalid"
+		for k: String in ["casualties", "month_cas", "targets", "cities_lost"]:
+			var arr: Variant = (p as Dictionary).get(k)
+			if typeof(arr) != TYPE_ARRAY or (arr as Array).size() != 2:
+				return "diplomacy record %s invalid" % k
+			for v: Variant in arr:
+				if typeof(v) != TYPE_INT:
+					return "diplomacy record %s invalid" % k
+		var a := int(p["a"])
+		var b := int(p["b"])
+		if a >= b or not ids.has(a) or not ids.has(b) or str(key) != "%d:%d" % [a, b]:
+			return "diplomacy record refers to unknown kingdoms"
+		if p.has("last_capture") and typeof(p["last_capture"]) != TYPE_INT:
+			return "diplomacy record invalid"
+	return ""
+
+
+static func _disasters(dd: Dictionary, world_size: int, w: int, h: int) -> String:
 	for k: String in ["burning", "fuel", "lava", "lava_t", "lava_flow"]:
 		if typeof(dd.get(k)) != TYPE_PACKED_INT32_ARRAY:
 			return "disasters.%s missing" % k
@@ -121,19 +164,34 @@ static func _disasters(dd: Dictionary, world_size: int) -> String:
 		if i < 0 or i >= world_size or seen.has(i):
 			return "burning tile out of range or duplicated"
 		seen[i] = true
+	for f in dd["fuel"]:
+		if f < 1 or f > DisasterSystem.MAX_FUEL:
+			return "fire fuel out of range"
+	var seen_l := {}
 	for i in dd["lava"]:
-		if i < 0 or i >= world_size:
-			return "lava tile out of range"
+		if i < 0 or i >= world_size or seen_l.has(i):
+			return "lava tile out of range or duplicated"
+		seen_l[i] = true
+	for t in dd["lava_t"]:
+		if t < 0 or t > DisasterSystem.LAVA_COOL_STEPS:
+			return "lava timer out of range"
+	for f in dd["lava_flow"]:
+		if f < 0 or f > DisasterSystem.MAX_LAVA_FLOW:
+			return "lava flow out of range"
 	if typeof(dd.get("quakes")) != TYPE_ARRAY or typeof(dd.get("last_record")) != TYPE_DICTIONARY:
 		return "disasters bookkeeping missing"
+	if (dd["quakes"] as Array).size() > DisasterSystem.MAX_QUAKES:
+		return "too many quakes"
 	for q: Variant in dd["quakes"]:
 		if typeof(q) != TYPE_DICTIONARY:
 			return "quake entry invalid"
 		for k: String in ["x", "y", "r", "left"]:
 			if typeof((q as Dictionary).get(k)) != TYPE_INT:
 				return "quake.%s missing" % k
-		if int(q["r"]) < 0 or int(q["r"]) > 64:
-			return "quake radius out of range"
+		if int(q["r"]) < 0 or int(q["r"]) > 64 or int(q["left"]) < 0 or int(q["left"]) > DisasterSystem.QUAKE_TICKS:
+			return "quake out of range"
+		if int(q["x"]) < 0 or int(q["y"]) < 0 or int(q["x"]) >= w or int(q["y"]) >= h:
+			return "quake out of the world"
 	return ""
 
 
@@ -158,6 +216,8 @@ static func _units(ud: Dictionary, world_size: int, w: int, h: int) -> String:
 	var job: PackedByteArray = ud["job"]
 	var state: PackedByteArray = ud["state"]
 	var task: PackedByteArray = ud["task"]
+	var disease: PackedInt32Array = ud["disease"]
+	var traits: PackedInt32Array = ud["traits"]
 	var carry: PackedByteArray = ud["carry_type"]
 	var xs: PackedFloat32Array = ud["x"]
 	var ys: PackedFloat32Array = ud["y"]
@@ -170,6 +230,8 @@ static func _units(ud: Dictionary, world_size: int, w: int, h: int) -> String:
 			return "unit slot %d has an invalid enum value" % s
 		if not (xs[s] >= 0.0 and ys[s] >= 0.0 and xs[s] < w and ys[s] < h):
 			return "unit slot %d is outside the world" % s
+		if disease[s] < 0 or disease[s] > DisasterSystem.PLAGUE_TICKS or traits[s] < 0 or traits[s] >= (1 << Traits.INFO.size()):
+			return "unit slot %d has invalid plague or trait data" % s
 	var paths: Dictionary = ud["path"]
 	for k: Variant in paths:
 		if typeof(k) != TYPE_INT or int(k) < 0 or int(k) >= cap or typeof(paths[k]) != TYPE_PACKED_INT32_ARRAY:
@@ -191,6 +253,8 @@ static func _city(c: Variant, world_size: int) -> String:
 			return "city.%s missing" % k
 	if typeof(c.get("storage")) != TYPE_DICTIONARY:
 		return "city.storage missing"
+	if not (typeof(c.get("loyalty")) in [TYPE_FLOAT, TYPE_INT]) or not is_finite(float(c["loyalty"])):
+		return "city.loyalty invalid"
 	for res in City.RESOURCES:
 		if not (typeof((c["storage"] as Dictionary).get(res)) in [TYPE_FLOAT, TYPE_INT]):
 			return "city storage '%s' missing" % res

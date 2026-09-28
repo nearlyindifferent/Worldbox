@@ -94,6 +94,8 @@ func to_dict() -> Dictionary:
 
 static func from_dict(d: Dictionary) -> City:
 	var c := City.new()
+	var known := City.new().to_dict()
 	for k: String in d:
-		c.set(k, d[k])
+		if known.has(k):
+			c.set(k, d[k])
 	return c

@@ -17,6 +17,9 @@ extends RefCounted
 ## with lifelong immunity.
 
 const FIRE_STEP := 3
+const MAX_FUEL := 12
+const MAX_LAVA_FLOW := 6
+const MAX_QUAKES := 32
 const MAX_BURNING := 8000
 const FIRE_DAMAGE := 7.0              ## health per fire step to a creature standing in flames
 const BUILDING_BURN_CHANCE := 0.12    ## per fire step on a building tile
@@ -423,6 +426,8 @@ func meteor(x: int, y: int, r: int) -> Dictionary:
 
 func earthquake(x: int, y: int, r: int) -> void:
 	var w := sim.world
+	if quakes.size() >= MAX_QUAKES:
+		return
 	var radius := maxi(8, r * 2 + 6)
 	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
 	record("quake", HistoryLog.Kind.DISASTER, "The earth shook near %s." % place_name(at), at, IMPACT_RECORD_GAP)

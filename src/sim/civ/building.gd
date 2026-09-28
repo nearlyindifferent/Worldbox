@@ -30,6 +30,8 @@ func to_dict() -> Dictionary:
 
 static func from_dict(d: Dictionary) -> Building:
 	var b := Building.new()
+	var known := Building.new().to_dict()
 	for k: String in d:
-		b.set(k, d[k])
+		if known.has(k):
+			b.set(k, d[k])
 	return b

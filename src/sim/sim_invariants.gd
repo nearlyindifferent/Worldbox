@@ -4,7 +4,18 @@ extends RefCounted
 ## tests, long-run fuzzing and the admin panel. Returns a list of violations.
 
 
+## True only when the last check() ran to the end. A script error part-way through
+## aborts check() with an empty result, which must not be read as "no violations".
+static var completed := false
+
+
+static func _done(errs: PackedStringArray) -> PackedStringArray:
+	completed = true
+	return errs
+
+
 static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
+	completed = false
 	var errs := PackedStringArray()
 	var u := sim.units
 	var w := sim.world
@@ -32,7 +43,7 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 			elif not (sim.cities[c] as City).members.has(u.id[s]):
 				errs.append("unit %d not in its city's member list" % u.id[s])
 		if errs.size() >= max_errors:
-			return errs
+			return _done(errs)
 	# Derived movement cache must agree with the authoritative path (else reloads diverge).
 	var wp := sim.movement._wp
 	if wp.size() == u.capacity:
@@ -74,7 +85,7 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 		if c.population() > 0 and c.housing <= 0 and c.buildings.size() == 0:
 			errs.append("city %s has people but no buildings" % c.name)
 		if errs.size() >= max_errors:
-			return errs
+			return _done(errs)
 
 	for b: Building in sim.buildings.values():
 		var c: City = sim.cities.get(b.city, null)
@@ -141,4 +152,4 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 		if dis.on_fire[i] != 1:
 			errs.append("burning tile %d not marked" % i)
 			break
-	return errs
+	return _done(errs)
