@@ -1,0 +1,12 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "ticks", "n": 9000},
+  {"do": "focus", "target": "center", "zoom": 0.62},
+  {"do": "frames", "n": 8},
+  {"do": "shot", "name": "progress_world"},
+  {"do": "select_city", "index": 0},
+  {"do": "zoom", "value": 3.2},
+  {"do": "frames", "n": 10},
+  {"do": "shot", "name": "progress_city"},
+  {"do": "print", "what": "stats"}
+]

@@ -11,7 +11,7 @@ const MAX_NEW_FIELDS_PER_PLAN := 2
 const TERRITORY_BASE := 80
 const TERRITORY_PER_PERSON := 8
 const MAX_CLAIMS_PER_PLAN := 4
-const BIRTH_CHANCE := 0.35
+const BIRTH_CHANCE := 0.18
 ## Births need stores covering this many months of the city's food need, so growth
 ## tracks food *production* rather than a fixed storage constant.
 const BIRTH_FOOD_MONTHS := 2.0

@@ -1,11 +1,11 @@
 {
-  "_doc": "Species definitions. Durations are in simulation years unless suffixed _ticks. speed is tiles per tick at 1x. 'index' is the stable on-disk id.",
+  "_doc": "Species definitions. Durations are in simulation years unless suffixed _ticks. speed is tiles per tick (humans 0.2 = 72 tiles walked per year; keep walking range per year in proportion to hunger and crop timings). 'index' is the stable on-disk id.",
   "species": [
     {
       "id": "human", "index": 0, "name": "Humans", "sapient": true,
-      "diet": "omnivore", "speed": 0.10, "max_health": 100, "damage": 8,
+      "diet": "omnivore", "speed": 0.20, "max_health": 100, "damage": 8,
       "lifespan": [55, 80], "adult_age": 14, "fertile_age": [16, 45],
-      "hunger_rate": 0.08, "meal_food": 2.0, "meal_hunger": 40,
+      "hunger_rate": 0.08, "meal_food": 4.0, "meal_hunger": 40,
       "birth_cooldown_years": 1.5, "litter": [1, 1],
       "walkable": "land", "sprite": "humanoid",
       "palette": {"skin": ["#f0c8a0", "#d8a478", "#b07850", "#7c5034"], "hair": ["#2a1a10", "#5c3a1c", "#a87838", "#d8c890", "#8a2c1c"]},
@@ -21,7 +21,7 @@
     },
     {
       "id": "sheep", "index": 1, "name": "Woolbacks", "sapient": false,
-      "diet": "herbivore", "speed": 0.07, "max_health": 30, "damage": 0,
+      "diet": "herbivore", "speed": 0.12, "max_health": 30, "damage": 0,
       "lifespan": [6, 10], "adult_age": 1, "fertile_age": [1, 8],
       "hunger_rate": 0.30, "graze_amount": 24, "graze_hunger": 35,
       "birth_chance_per_month": 0.12, "birth_cooldown_years": 0.8, "litter": [1, 2],

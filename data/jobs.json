@@ -2,7 +2,7 @@
   "_doc": "Job definitions for sapient citizens. 'index' is the stable on-disk id. work_ticks is time spent working a site per trip; yield is resource units carried back per trip before modifiers.",
   "jobs": [
     {"id": "none",       "index": 0, "name": "Idle",       "resource": "",      "work_ticks": 0,  "yield": 0.0},
-    {"id": "gatherer",   "index": 1, "name": "Gatherer",   "resource": "food",  "work_ticks": 24, "yield": 1.2, "veg_cost": 60, "search_radius": 14},
+    {"id": "gatherer",   "index": 1, "name": "Gatherer",   "resource": "food",  "work_ticks": 24, "yield": 2.0, "veg_cost": 60, "search_radius": 14},
     {"id": "farmer",     "index": 2, "name": "Farmer",     "resource": "food",  "work_ticks": 30, "yield": 2.5, "search_radius": 12},
     {"id": "woodcutter", "index": 3, "name": "Woodcutter", "resource": "wood",  "work_ticks": 40, "yield": 4.0, "wood_cost": 40, "search_radius": 16},
     {"id": "miner",      "index": 4, "name": "Quarrier",   "resource": "stone", "work_ticks": 50, "yield": 3.0, "search_radius": 18},

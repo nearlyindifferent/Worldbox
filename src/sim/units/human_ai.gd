@@ -15,6 +15,9 @@ const TEND_BOOST := 40
 const NOMAD_FLOCK_RADIUS := 14.0
 const HUNT_KILL_RANGE := 1.5
 const JOIN_SEARCH_RADIUS := 40.0
+const TOP_UP_HUNGER := 25.0
+const FARM_CARRY_LIMIT := 10.0
+const FARM_HOP_RADIUS := 6.0
 
 var sim: Simulation
 var _def: Defs.SpeciesDef
@@ -80,7 +83,11 @@ func _think(s: int) -> void:
 	var city: City = sim.cities.get(u.city[s], null)
 	var adult := u.age_years(s, sim.tick) >= _def.adult_age
 
-	# 1. Survival
+	# 1. Survival. At home with food in store, top up before setting out so long
+	# work trips do not end in a hunger retreat.
+	if city != null and u.hunger[s] >= TOP_UP_HUNGER and u.hunger[s] < SimConst.HUNGER_EAT_THRESHOLD \
+			and w.owner[ti] == city.id and float(city.storage["food"]) >= _meal_food:
+		_eat_from_store(s, city)
 	if u.hunger[s] >= SimConst.HUNGER_EAT_THRESHOLD:
 		if u.carry_type[s] == CARRY_FOOD and u.carry_amount[s] > 0.0:
 			var take := minf(u.carry_amount[s], _meal_food)
@@ -372,6 +379,14 @@ func _on_work_done(s: int) -> void:
 					w.vegetation[ti] = 0
 					w.mark_dirty(ti)
 					_receive(s, CARRY_FOOD, jd.yield_amount * (0.5 + 0.5 * w.fertility(ti)))
+					# Keep harvesting neighbouring ripe fields before the walk to storage.
+					if u.carry_amount[s] < FARM_CARRY_LIMIT:
+						var city: City = sim.cities.get(u.city[s], null)
+						if city != null:
+							var nxt := sim.civ.pick_field(city, u.x[s], u.y[s])
+							if nxt >= 0 and w.vegetation[nxt] >= SimConst.CROP_MATURE and Vector2(nxt % w.width - u.x[s], nxt / w.width - u.y[s]).length() <= FARM_HOP_RADIUS:
+								if _go(s, nxt, UnitStore.Task.FARM):
+									return
 				else:
 					w.vegetation[ti] = mini(255, w.vegetation[ti] + TEND_BOOST)
 					w.mark_dirty(ti)

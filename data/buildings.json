@@ -5,7 +5,7 @@
      "cost": {}, "work": 0, "max_health": 400, "sprite": "town_hall",
      "desc": "Heart of a settlement. Stores the city's goods and shelters its first families."},
     {"id": "house", "index": 1, "name": "House", "size": 2, "housing": 5, "storage": false,
-     "cost": {"wood": 12}, "work": 240, "max_health": 150, "sprite": "house",
+     "cost": {"wood": 18}, "work": 240, "max_health": 150, "sprite": "house",
      "desc": "Shelters a household. Cities cannot grow beyond their housing."},
     {"id": "granary", "index": 2, "name": "Granary", "size": 2, "housing": 0, "storage": true,
      "cost": {"wood": 18, "stone": 4}, "work": 300, "max_health": 200, "sprite": "granary",

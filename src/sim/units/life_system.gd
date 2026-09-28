@@ -1,6 +1,9 @@
 class_name LifeSystem
 extends RefCounted
-## Per-tick biological upkeep: hunger, starvation, hazards, regeneration, old age.
+## Batched biological upkeep for every creature: hunger, starvation, hazards,
+## regeneration and old age, in one tight pass over the unit arrays with law and
+## table lookups hoisted out of the loop. Deaths are applied after the pass in
+## slot order so the result is deterministic and independent of AI ordering.
 
 var sim: Simulation
 var _hunger_rate := PackedFloat32Array()
@@ -13,31 +16,66 @@ func _init(p_sim: Simulation) -> void:
 		_hunger_rate[sp.index] = sp.hunger_rate
 
 
-## Returns false if the unit died this tick.
-func update(s: int) -> bool:
+func update_all() -> void:
 	var u := sim.units
-	var laws := sim.laws
-	var invulnerable := u.has_flag(s, UnitStore.Flag.INVULNERABLE)
-	if laws.is_on("hunger"):
-		var h := u.hunger[s] + _hunger_rate[u.species[s]]
-		if h >= SimConst.HUNGER_MAX:
-			h = SimConst.HUNGER_MAX
-			if not invulnerable:
-				u.health[s] -= SimConst.STARVE_DAMAGE
-		u.hunger[s] = h
-	if u.hunger[s] < SimConst.HUNGER_EAT_THRESHOLD and u.health[s] < u.max_health[s]:
-		u.health[s] = minf(u.max_health[s], u.health[s] + SimConst.REGEN_PER_TICK)
-	var ti := int(u.y[s]) * sim.world.width + int(u.x[s])
-	if not sim.world.is_walkable(ti) and not invulnerable:
-		u.health[s] -= SimConst.HAZARD_DAMAGE
-		if u.task[s] != UnitStore.Task.SEEK_LAND:
-			u.next_think[s] = sim.tick
-			u.state[s] = UnitStore.State.IDLE
-	if u.health[s] <= 0.0:
-		var cause := "starvation" if u.hunger[s] >= SimConst.HUNGER_MAX else ("drowning" if sim.world.is_water(ti) else "injury")
-		sim.kill_unit(s, cause)
-		return false
-	if laws.is_on("natural_death") and not invulnerable and sim.tick - u.birth_tick[s] >= u.death_age[s]:
-		sim.kill_unit(s, "old age")
-		return false
-	return true
+	var w := sim.world
+	# Packed arrays are shared by reference, so these locals write through.
+	var alive := u.alive
+	var hunger := u.hunger
+	var health := u.health
+	var max_health := u.max_health
+	var flags := u.flags
+	var species := u.species
+	var xs := u.x
+	var ys := u.y
+	var pxs := u.prev_x
+	var pys := u.prev_y
+	var birth := u.birth_tick
+	var death_age := u.death_age
+	var state := u.state
+	var task := u.task
+	var next_think := u.next_think
+	var biome := w.biome
+	var walk := Defs.biome_walkable
+	var water := Defs.biome_water
+	var rates := _hunger_rate
+	var width := w.width
+	var tick := sim.tick
+	var hunger_on := sim.laws.is_on("hunger")
+	var aging_on := sim.laws.is_on("natural_death")
+	var invuln_bit: int = UnitStore.Flag.INVULNERABLE
+	var seek: int = UnitStore.Task.SEEK_LAND
+	var idle: int = UnitStore.State.IDLE
+	var dead_slots := PackedInt32Array()
+	var dead_causes := PackedStringArray()
+	for s in u.capacity:
+		if alive[s] == 0:
+			continue
+		pxs[s] = xs[s]
+		pys[s] = ys[s]
+		var invulnerable := (flags[s] & invuln_bit) != 0
+		var h := hunger[s]
+		if hunger_on:
+			h += rates[species[s]]
+			if h >= SimConst.HUNGER_MAX:
+				h = SimConst.HUNGER_MAX
+				if not invulnerable:
+					health[s] -= SimConst.STARVE_DAMAGE
+			hunger[s] = h
+		if h < SimConst.HUNGER_EAT_THRESHOLD and health[s] < max_health[s]:
+			health[s] = minf(max_health[s], health[s] + SimConst.REGEN_PER_TICK)
+		var ti := int(ys[s]) * width + int(xs[s])
+		var b := biome[ti]
+		if walk[b] == 0 and not invulnerable:
+			health[s] -= SimConst.HAZARD_DAMAGE
+			if task[s] != seek:
+				next_think[s] = tick
+				state[s] = idle
+		if health[s] <= 0.0:
+			dead_slots.append(s)
+			dead_causes.append("starvation" if h >= SimConst.HUNGER_MAX else ("drowning" if water[b] == 1 else "injury"))
+		elif aging_on and not invulnerable and tick - birth[s] >= death_age[s]:
+			dead_slots.append(s)
+			dead_causes.append("old age")
+	for k in dead_slots.size():
+		sim.kill_unit(dead_slots[k], dead_causes[k])

@@ -4,6 +4,8 @@ extends RefCounted
 ## first-seen original values of every touched tile; undo restores them exactly.
 
 const UNDO_LIMIT := 50
+## Total tiles kept across all undo strokes (bounds memory and save size).
+const UNDO_TILE_BUDGET := 200000
 const RAISE_STEP := 0.035
 
 ## power id -> target biome id for paint brushes
@@ -50,7 +52,11 @@ func begin_stroke() -> void:
 func end_stroke() -> void:
 	if _in_stroke and _s_tiles.size() > 0:
 		undo_stack.append({"tiles": _s_tiles, "elev": _s_elev, "biome": _s_biome, "veg": _s_veg, "wood": _s_wood, "temp": _s_temp})
-		if undo_stack.size() > UNDO_LIMIT:
+		var total := 0
+		for st in undo_stack:
+			total += (st["tiles"] as PackedInt32Array).size()
+		while undo_stack.size() > UNDO_LIMIT or (total > UNDO_TILE_BUDGET and undo_stack.size() > 1):
+			total -= (undo_stack[0]["tiles"] as PackedInt32Array).size()
 			undo_stack.remove_at(0)
 	_in_stroke = false
 	_stroke_seen = {}
@@ -76,8 +82,19 @@ func is_terrain_power(power: String) -> bool:
 	return power == "raise" or power == "lower" or PAINT.has(power)
 
 
-## Applies a circular brush. Returns number of tiles changed.
+## Applies a circular brush. Returns number of tiles changed. A brush applied outside
+## an explicit stroke is its own complete stroke (so undo state is never left open).
 func apply_brush(power: String, cx: int, cy: int, radius: int) -> int:
+	var standalone := not _in_stroke
+	if standalone:
+		begin_stroke()
+	var n := _apply_disk(power, cx, cy, radius)
+	if standalone:
+		end_stroke()
+	return n
+
+
+func _apply_disk(power: String, cx: int, cy: int, radius: int) -> int:
 	var w := sim.world
 	var changed := 0
 	var r := maxi(0, radius)

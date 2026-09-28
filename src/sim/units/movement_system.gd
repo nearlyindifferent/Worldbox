@@ -23,6 +23,8 @@ func _init(p_sim: Simulation) -> void:
 func go_to(s: int, to_i: int, use_astar: bool) -> int:
 	var u := sim.units
 	var w := sim.world.width
+	if to_i < 0 or to_i >= sim.world.size:
+		return Plan.UNREACHABLE
 	var from_i := int(u.y[s]) * w + int(u.x[s])
 	if from_i == to_i:
 		u.path[s] = PackedInt32Array([to_i])

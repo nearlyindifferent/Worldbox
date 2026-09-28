@@ -11,6 +11,9 @@ const MAX_BRUSH_RADIUS := 16
 
 static func execute(sim: Simulation, cmd: Dictionary) -> Dictionary:
 	var op: String = cmd.get("op", "")
+	# Commands run between ticks; the spatial index must reflect current positions so a
+	# command behaves the same in an uninterrupted run and in a freshly loaded one.
+	sim.spatial.rebuild(sim.units)
 	match op:
 		"stroke_begin":
 			sim.editor.begin_stroke()

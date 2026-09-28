@@ -4,7 +4,7 @@ extends RefCounted
 ## advances it in fixed ticks. Contains no rendering or UI code and never reads
 ## frame time, so the same seed + command stream reproduces the same world.
 
-const SAVE_SCHEMA := 1
+const SAVE_SCHEMA := 2
 
 var seed_value: int = 0
 var shape: String = "island"
@@ -132,16 +132,19 @@ func step() -> void:
 	_time("vegetation", t)
 
 	t = Time.get_ticks_usec()
+	life.update_all()
+	_time("life", t)
+
+	t = Time.get_ticks_usec()
+	var alive := units.alive
+	var flags := units.flags
+	var species := units.species
+	var frozen_bit: int = UnitStore.Flag.FROZEN
+	var hs := human_species
 	for s in units.capacity:
-		if units.alive[s] == 0:
+		if alive[s] == 0 or (flags[s] & frozen_bit) != 0:
 			continue
-		units.prev_x[s] = units.x[s]
-		units.prev_y[s] = units.y[s]
-		if not life.update(s):
-			continue
-		if units.has_flag(s, UnitStore.Flag.FROZEN):
-			continue
-		if units.species[s] == human_species:
+		if species[s] == hs:
 			human_ai.update(s)
 		else:
 			animal_ai.update(s)
@@ -373,6 +376,7 @@ func to_dict() -> Dictionary:
 		"deceased": deceased.duplicate(true), "pop_milestone": pop_milestone,
 		"civ_state": civ.to_dict(),
 		"components": pathfinder.components_to_dict(),
+		"undo": editor.undo_stack.duplicate(true),
 	}
 
 
@@ -415,7 +419,24 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim._init_systems()
 	sim.civ.from_dict(d["civ_state"])
 	sim.pathfinder.components_from_dict(d["components"])
+	sim.editor.undo_stack.assign(d["undo"])
 	return sim
+
+
+## Builds a Simulation from an untrusted (already migrated) save dictionary.
+## Returns {"ok", "sim"|"msg"}; the world must pass structural validation and all
+## invariants, otherwise nothing is returned.
+static func from_save(d: Dictionary) -> Dictionary:
+	var err := SaveValidator.validate(d)
+	if err != "":
+		return {"ok": false, "msg": "Save rejected: %s" % err}
+	var sim := Simulation.from_dict(d)
+	if sim == null:
+		return {"ok": false, "msg": "Save rejected: could not rebuild world"}
+	var errs := SimInvariants.check(sim, 5)
+	if errs.size() > 0:
+		return {"ok": false, "msg": "Save rejected: inconsistent world (%s)" % errs[0]}
+	return {"ok": true, "sim": sim}
 
 
 ## Independent deep copy. to_dict() shares packed arrays with this simulation, so

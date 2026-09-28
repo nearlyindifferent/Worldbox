@@ -95,6 +95,11 @@ func _install(new_sim: Simulation) -> void:
 	camera.setup_world(terrain.world_pixel_size())
 	selected_unit = -1
 	selected_city = -1
+	fx.selected_unit = -1
+	fx.selected_city = -1
+	pending_teleport_id = -1
+	camera.follow(Callable())
+	_stroke_active = false
 	_acc = 0.0
 	_last_autosave_year = sim.year()
 	world_changed.emit()
