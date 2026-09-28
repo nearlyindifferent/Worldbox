@@ -1,0 +1,33 @@
+{
+  "_doc": "Species definitions. Durations are in simulation years unless suffixed _ticks. speed is tiles per tick at 1x. 'index' is the stable on-disk id.",
+  "species": [
+    {
+      "id": "human", "index": 0, "name": "Humans", "sapient": true,
+      "diet": "omnivore", "speed": 0.10, "max_health": 100, "damage": 8,
+      "lifespan": [55, 80], "adult_age": 14, "fertile_age": [16, 45],
+      "hunger_rate": 0.08, "meal_food": 2.0, "meal_hunger": 40,
+      "birth_cooldown_years": 1.5, "litter": [1, 1],
+      "walkable": "land", "sprite": "humanoid",
+      "palette": {"skin": ["#f0c8a0", "#d8a478", "#b07850", "#7c5034"], "hair": ["#2a1a10", "#5c3a1c", "#a87838", "#d8c890", "#8a2c1c"]},
+      "name_syllables": {
+        "first": ["al", "bren", "cor", "da", "el", "fen", "gar", "hal", "is", "jor", "ka", "lin", "mor", "nes", "or", "pel", "ren", "sa", "tor", "ul", "vel", "wen", "yor", "za"],
+        "mid": ["a", "e", "i", "o", "an", "el", "ar", "in", "or", "u"],
+        "last": ["n", "th", "ra", "ric", "wyn", "mir", "sa", "dor", "ly", "ven", "is", "ek", "ia", "on"]
+      },
+      "city_names": {
+        "prefix": ["Ash", "Bright", "Cold", "Deep", "East", "Fair", "Green", "High", "Iron", "Long", "Mill", "North", "Oak", "Red", "Stone", "Thorn", "West", "White", "Wolf", "Elder"],
+        "suffix": ["ford", "haven", "hold", "mere", "moor", "stead", "vale", "wick", "field", "brook", "gate", "watch", "barrow", "reach"]
+      }
+    },
+    {
+      "id": "sheep", "index": 1, "name": "Woolbacks", "sapient": false,
+      "diet": "herbivore", "speed": 0.07, "max_health": 30, "damage": 0,
+      "lifespan": [6, 10], "adult_age": 1, "fertile_age": [1, 8],
+      "hunger_rate": 0.30, "graze_amount": 24, "graze_hunger": 35,
+      "birth_chance_per_month": 0.12, "birth_cooldown_years": 0.8, "litter": [1, 2],
+      "local_density_cap": 7, "meat_food": 4,
+      "walkable": "land", "sprite": "quadruped",
+      "palette": {"wool": ["#e8e4d8", "#d4ccb8", "#f4f0e8"], "face": ["#3a302a", "#5a4838"]}
+    }
+  ]
+}

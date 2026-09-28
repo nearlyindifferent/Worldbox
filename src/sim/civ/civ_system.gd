@@ -1,0 +1,781 @@
+class_name CivSystem
+extends RefCounted
+## Settlement lifecycle: founding, territory, job allocation, farmland, construction,
+## births, succession and abandonment. Every city re-plans on a staggered cadence.
+## Growth is constrained by real conditions (housing, food stock, materials, land),
+## never by timers alone.
+
+const PALETTE_SIZE := 16
+const FIELDS_PER_FARMER := 4
+const MAX_NEW_FIELDS_PER_PLAN := 2
+const TERRITORY_BASE := 80
+const TERRITORY_PER_PERSON := 8
+const MAX_CLAIMS_PER_PLAN := 4
+const BIRTH_CHANCE := 0.35
+const FOOD_PER_PERSON_FOR_BIRTH := 1.5
+const START_FOOD := 10.0
+
+var sim: Simulation
+var _human: Defs.SpeciesDef
+var _meal_food: float
+
+
+func _init(p_sim: Simulation) -> void:
+	sim = p_sim
+	_human = Defs.species[sim.human_species]
+	_meal_food = float(_human.raw["meal_food"])
+
+
+func update() -> void:
+	var monthly := sim.tick % SimConst.TICKS_PER_MONTH == 0
+	for c: City in sim.cities.values():
+		if (sim.tick + c.id * 7) % SimConst.CITY_PLAN_INTERVAL == 0:
+			_plan(c)
+		if monthly and c.alive:
+			_monthly(c)
+	var dead: Array[int] = []
+	for c: City in sim.cities.values():
+		if not c.alive:
+			dead.append(c.id)
+	for id in dead:
+		sim.cities.erase(id)
+
+
+# ------------------------------------------------------------------ founding
+
+## Scores a potential settlement site. Returns {ok, score, reasons}.
+func evaluate_site(ti: int, check_companions_for: int = -1) -> Dictionary:
+	var w := sim.world
+	var reasons: Array = []
+	var x := ti % w.width
+	var y := ti / w.width
+	if not _can_place_footprint(-1, x, y, 2):
+		return {"ok": false, "score": 0.0, "reasons": [["site blocked", "no room for a town hall"]]}
+	var nearest := INF
+	for c: City in sim.cities.values():
+		var cx := c.center % w.width
+		var cy := c.center / w.width
+		nearest = minf(nearest, Vector2(cx - x, cy - y).length())
+	if nearest < SimConst.FOUND_MIN_CITY_DISTANCE:
+		return {"ok": false, "score": 0.0, "reasons": [["too close to another city", nearest]]}
+	var fert := 0.0
+	var owned := 0
+	var r := SimConst.FOUND_SITE_RADIUS
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if dx * dx + dy * dy > r * r or not w.in_bounds(x + dx, y + dy):
+				continue
+			var i := w.idx(x + dx, y + dy)
+			if w.owner[i] != SimConst.CITY_NONE:
+				owned += 1
+			elif w.is_walkable(i):
+				fert += w.fertility(i)
+	reasons.append(["fertile land", fert])
+	var score := fert
+	var water := _has_biome_near(x, y, 7, [Defs.biome_index("shallow"), Defs.biome_index("ocean")])
+	if water:
+		score += 8.0
+		reasons.append(["water access", 8.0])
+	if _has_biome_near(x, y, 9, [Defs.forest_index]):
+		score += 6.0
+		reasons.append(["timber nearby", 6.0])
+	if _has_biome_near(x, y, 12, [Defs.hills_index, Defs.mountain_index]):
+		score += 3.0
+		reasons.append(["stone nearby", 3.0])
+	if owned > 0:
+		score -= owned
+		reasons.append(["contested land", -float(owned)])
+	if nearest != INF:
+		reasons.append(["distance to nearest city", nearest])
+	var ok := score >= SimConst.FOUND_MIN_SITE_SCORE
+	if check_companions_for >= 0:
+		var band := _band_of(check_companions_for)
+		reasons.append(["band size", band.size()])
+		if band.size() < 2:
+			ok = false
+	reasons.append(["threshold", SimConst.FOUND_MIN_SITE_SCORE])
+	return {"ok": ok, "score": score, "reasons": reasons}
+
+
+func _has_biome_near(x: int, y: int, r: int, biomes: Array) -> bool:
+	var w := sim.world
+	# Coarse ring sampling (step 2) is enough to answer "is there any nearby?".
+	for dy in range(-r, r + 1, 2):
+		for dx in range(-r, r + 1, 2):
+			if w.in_bounds(x + dx, y + dy) and w.biome[w.idx(x + dx, y + dy)] in biomes:
+				return true
+	return false
+
+
+## Cityless adults of the same species near unit s (including s).
+func _band_of(s: int) -> PackedInt32Array:
+	var u := sim.units
+	var out := PackedInt32Array()
+	for o in sim.spatial.query_radius(u, u.x[s], u.y[s], SimConst.CITY_JOIN_RADIUS, u.species[s]):
+		if u.city[o] == SimConst.CITY_NONE:
+			out.append(o)
+	return out
+
+
+func try_found_here(s: int, ti: int) -> bool:
+	if not sim.laws.is_on("settlement_founding"):
+		return false
+	var ev := evaluate_site(ti, s)
+	if not ev["ok"]:
+		return false
+	found_city(s, ti, ev["reasons"])
+	return true
+
+
+## Picks the best of a few random nearby candidate sites (by score), or -1.
+func scout_site(ti: int) -> int:
+	var w := sim.world
+	var best := -1
+	var best_score := -INF
+	var cx := ti % w.width
+	var cy := ti / w.width
+	for k in 6:
+		var x := clampi(cx + sim.rng.randi_range(-24, 24), 0, w.width - 1)
+		var y := clampi(cy + sim.rng.randi_range(-24, 24), 0, w.height - 1)
+		var i := w.idx(x, y)
+		if not w.is_walkable(i):
+			continue
+		var ev := evaluate_site(i)
+		if float(ev["score"]) > best_score:
+			best_score = ev["score"]
+			best = i
+	return best
+
+
+func found_city(s: int, ti: int, reasons: Array) -> City:
+	var u := sim.units
+	var w := sim.world
+	var c := City.new()
+	c.id = sim.next_city_id
+	sim.next_city_id += 1
+	var taken := {}
+	for other: City in sim.cities.values():
+		taken[other.name] = true
+	c.name = NameGen.city_name(Defs.species[u.species[s]], sim.rng, taken)
+	c.species = u.species[s]
+	c.founded_tick = sim.tick
+	c.founder_id = u.id[s]
+	c.leader_id = u.id[s]
+	c.color_index = (c.id * 5) % PALETTE_SIZE
+	c.founding_reasons = reasons
+	c.storage["food"] = START_FOOD
+	c.job_counts.resize(Defs.jobs.size())
+	c.job_targets.resize(Defs.jobs.size())
+	sim.cities[c.id] = c
+	var x := ti % w.width
+	var y := ti / w.width
+	var hall := _place_building(c, Defs.building_by_id("town_hall").index, x, y, true)
+	c.center = hall.center_tile(w.width)
+	_claim_disk(c, c.center % w.width, c.center / w.width, SimConst.CITY_START_RADIUS)
+	for o in _band_of(s):
+		join_city(o, c)
+	join_city(s, c)
+	_recompute_capacity(c)
+	sim.history.record(sim.tick, HistoryLog.Kind.CITY_FOUNDED, "%s was founded by %s." % [c.name, u.name[s]], {"city": c.id, "unit": u.id[s]}, c.center)
+	sim.decisions.record(sim.tick, "settlement", u.name[s], "founded %s" % c.name, reasons, {"city": c.id})
+	return c
+
+
+func find_joinable_city(s: int, radius: float) -> City:
+	var u := sim.units
+	var w := sim.world
+	var best: City = null
+	var best_d := radius
+	for c: City in sim.cities.values():
+		if c.species != u.species[s] or c.population() >= c.housing + 2:
+			continue
+		var d := Vector2(float(c.center % w.width) - u.x[s], float(c.center / w.width) - u.y[s]).length()
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+func join_city(s: int, c: City) -> void:
+	var u := sim.units
+	if u.city[s] == c.id:
+		return
+	if u.city[s] != SimConst.CITY_NONE and sim.cities.has(u.city[s]):
+		(sim.cities[u.city[s]] as City).remove_member(u.id[s])
+	u.city[s] = c.id
+	c.members.append(u.id[s])
+	# Dependent cityless children follow their parent into the city.
+	for cid in u.children.get(u.id[s], PackedInt64Array()):
+		var cs := u.slot_for(cid)
+		if cs >= 0 and u.city[cs] == SimConst.CITY_NONE and u.age_years(cs, sim.tick) < _human.adult_age:
+			u.city[cs] = c.id
+			c.members.append(cid)
+
+
+# ------------------------------------------------------------------ planning
+
+func _plan(c: City) -> void:
+	if c.population() == 0:
+		abandon_city(c, "its last inhabitant is gone")
+		return
+	_recompute_capacity(c)
+	_ensure_leader(c)
+	_validate_fields(c)
+	_assign_jobs(c)
+	_manage_fields(c)
+	if sim.laws.is_on("construction"):
+		_plan_construction(c)
+	_expand_territory(c)
+
+
+func _recompute_capacity(c: City) -> void:
+	var housing := 0
+	var food_cap := float(Defs.building_globals.get("base_food_capacity", 100))
+	var valid := PackedInt32Array()
+	for bid in c.buildings:
+		var b: Building = sim.buildings.get(bid, null)
+		if b == null:
+			continue
+		valid.append(bid)
+		if b.complete:
+			housing += b.def().housing
+			food_cap += float(b.def().raw.get("food_capacity", 0))
+	c.buildings = valid
+	c.housing = housing
+	c.food_capacity = food_cap
+
+
+func _ensure_leader(c: City) -> void:
+	var u := sim.units
+	if u.is_alive_id(c.leader_id):
+		return
+	var best := -1
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s >= 0 and u.age_years(s, sim.tick) >= _human.adult_age and (best < 0 or u.birth_tick[s] < u.birth_tick[best]):
+			best = s
+	if best >= 0:
+		c.leader_id = u.id[best]
+		sim.history.record(sim.tick, HistoryLog.Kind.LEADER_CHANGED, "%s became leader of %s." % [u.name[best], c.name], {"city": c.id, "unit": u.id[best]}, c.center)
+		sim.decisions.record(sim.tick, "succession", c.name, "chose %s as leader" % u.name[best], [["rule", "eldest adult member"], ["age", u.age_years(best, sim.tick)]], {"city": c.id})
+
+
+## Target worker counts in priority order. Pure function of city state.
+func compute_job_targets(c: City, adults: int) -> PackedInt32Array:
+	var t := PackedInt32Array()
+	t.resize(Defs.jobs.size())
+	if adults <= 0:
+		return t
+	var pop := c.population()
+	var food: float = c.storage["food"]
+	var monthly_need := pop * _human.hunger_rate * SimConst.TICKS_PER_MONTH / float(_human.raw["meal_hunger"]) * _meal_food
+	var months_of_food := food / maxf(1.0, monthly_need)
+	var sites_ready := 0
+	var wood_need := 0.0
+	var stone_need := 0.0
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if b.complete:
+			continue
+		if b.paid or _affordable(c, b):
+			sites_ready += 1
+		else:
+			wood_need += float(b.def().cost.get("wood", 0))
+			stone_need += float(b.def().cost.get("stone", 0))
+	var wood: float = c.storage["wood"]
+	var stone: float = c.storage["stone"]
+	var want := {}
+	# Food first, scaled by how many months the stores would last.
+	var food_share := 0.45 if months_of_food < 1.0 else (0.3 if months_of_food < 4.0 else 0.15)
+	var food_workers := maxi(1, ceili(adults * food_share))
+	want["farmer"] = ceili(food_workers * 0.6) if pop >= 3 else 0
+	want["gatherer"] = food_workers - int(want["farmer"])
+	want["woodcutter"] = maxi(1, ceili(adults * 0.25)) if wood < wood_need + 12.0 else (1 if adults >= 4 else 0)
+	want["builder"] = mini(sites_ready * 2, maxi(1, ceili(adults * 0.25)))
+	want["miner"] = maxi(1, ceili(adults * 0.1)) if stone < stone_need else (1 if adults >= 8 and stone < 40.0 else 0)
+	want["hunter"] = 1 if adults >= 6 else 0
+	var left := adults
+	for jid in ["farmer", "gatherer", "woodcutter", "builder", "miner", "hunter"]:
+		var n := mini(int(want[jid]), left)
+		t[Defs.job_by_id(jid).index] = n
+		left -= n
+	# Spare hands stockpile timber while it is scarce, otherwise gather food.
+	var spare := "woodcutter" if wood < 60.0 else "gatherer"
+	t[Defs.job_by_id(spare).index] += left
+	return t
+
+
+func _assign_jobs(c: City) -> void:
+	var u := sim.units
+	var adults: Array[int] = []
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s >= 0 and u.age_years(s, sim.tick) >= _human.adult_age:
+			adults.append(s)
+		elif s >= 0:
+			u.job[s] = 0
+	var targets := compute_job_targets(c, adults.size())
+	var counts := PackedInt32Array()
+	counts.resize(targets.size())
+	var unassigned: Array[int] = []
+	for s in adults:
+		var j := u.job[s]
+		if j != 0 and counts[j] < targets[j]:
+			counts[j] += 1
+		else:
+			unassigned.append(s)
+	for s in unassigned:
+		for j in targets.size():
+			if j != 0 and counts[j] < targets[j]:
+				if u.job[s] != j:
+					u.job[s] = j
+					if u.state[s] != UnitStore.State.WORKING:
+						u.task[s] = UnitStore.Task.NONE
+				counts[j] += 1
+				break
+	c.job_targets = targets
+	c.job_counts = counts
+
+
+func _validate_fields(c: City) -> void:
+	var w := sim.world
+	var valid := PackedInt32Array()
+	for f in c.fields:
+		if w.biome[f] == Defs.farmland_index and w.owner[f] == c.id:
+			valid.append(f)
+	c.fields = valid
+
+
+func _manage_fields(c: City) -> void:
+	var w := sim.world
+	var farmers := c.job_targets[Defs.job_by_id("farmer").index] if c.job_targets.size() > 0 else 0
+	var desired := farmers * FIELDS_PER_FARMER
+	var added := 0
+	while c.fields.size() < desired and added < MAX_NEW_FIELDS_PER_PLAN:
+		var best := -1
+		var best_score := -INF
+		var ccx := c.center % w.width
+		var ccy := c.center / w.width
+		for k in 40:
+			var i: int = c.territory[sim.rng.randi_range(0, c.territory.size() - 1)]
+			var b := w.biome[i]
+			if not (b == Defs.grassland_index or b == Defs.biome_index("soil")):
+				continue
+			if w.building[i] != SimConst.BUILDING_ID_NONE or _near_building(i, 1):
+				continue
+			var fert := w.fertility(i)
+			if fert < 0.35:
+				continue
+			var d := Vector2(i % w.width - ccx, i / w.width - ccy).length()
+			var score := fert * 10.0 - d * 0.4 + (3.0 if _adjacent_to_field(i) else 0.0)
+			if score > best_score:
+				best_score = score
+				best = i
+		if best < 0:
+			break
+		w.set_biome(best, Defs.farmland_index)
+		sim.pathfinder.refresh_tile_cost(best)
+		c.fields.append(best)
+		added += 1
+
+
+func _adjacent_to_field(i: int) -> bool:
+	var w := sim.world
+	var x := i % w.width
+	var y := i / w.width
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if w.in_bounds(x + d.x, y + d.y) and w.biome[w.idx(x + d.x, y + d.y)] == Defs.farmland_index:
+			return true
+	return false
+
+
+func _near_building(i: int, r: int) -> bool:
+	var w := sim.world
+	var x := i % w.width
+	var y := i / w.width
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if w.in_bounds(x + dx, y + dy) and w.building[w.idx(x + dx, y + dy)] != SimConst.BUILDING_ID_NONE:
+				return true
+	return false
+
+
+func pick_field(c: City, ux: float, uy: float) -> int:
+	var w := sim.world
+	var best := -1
+	var best_score := INF
+	for f in c.fields:
+		var d := Vector2(float(f % w.width) + 0.5 - ux, float(f / w.width) + 0.5 - uy).length()
+		var score := d if w.vegetation[f] >= SimConst.CROP_MATURE else d + 25.0 + float(w.vegetation[f]) * 0.1
+		if score < best_score:
+			best_score = score
+			best = f
+	return best
+
+
+# ------------------------------------------------------------------ construction
+
+func _plan_construction(c: City) -> void:
+	# One housing project and one civic project may run in parallel so a stalled
+	# civic build (e.g. waiting on stone) never blocks population growth.
+	var house_pending := false
+	var civic_pending := false
+	for bid in c.buildings:
+		var pb: Building = sim.buildings[bid]
+		if not pb.complete:
+			if pb.def().housing > 0:
+				house_pending = true
+			else:
+				civic_pending = true
+	var granary := Defs.building_by_id("granary")
+	if not house_pending and c.housing - c.population() < 3:
+		_start_project(c, Defs.building_by_id("house").index)
+	if not civic_pending and c.population() >= int(granary.raw.get("min_population", 14)) and not _has_building(c, granary.index):
+		_start_project(c, granary.index)
+
+
+func _start_project(c: City, type: int) -> void:
+	var site := _find_site(c, Defs.buildings[type].size)
+	if site < 0:
+		sim.decisions.record(sim.tick, "construction", c.name, "could not place %s" % Defs.buildings[type].name, [["reason", "no free land in territory"]], {"city": c.id})
+		return
+	var b := _place_building(c, type, site % sim.world.width, site / sim.world.width, false)
+	sim.decisions.record(sim.tick, "construction", c.name, "planned %s" % b.def().name,
+		[["population", c.population()], ["housing", c.housing], ["wood in store", float(c.storage["wood"])]], {"city": c.id, "building": b.id})
+
+
+func _has_building(c: City, type: int) -> bool:
+	for bid in c.buildings:
+		if (sim.buildings[bid] as Building).type == type:
+			return true
+	return false
+
+
+func _find_site(c: City, size: int) -> int:
+	var w := sim.world
+	var best := -1
+	var best_score := -INF
+	var ccx := c.center % w.width
+	var ccy := c.center / w.width
+	for k in 48:
+		var i: int = c.territory[sim.rng.randi_range(0, c.territory.size() - 1)]
+		var x := i % w.width
+		var y := i / w.width
+		if not _can_place_footprint(c.id, x, y, size):
+			continue
+		var d := Vector2(x - ccx, y - ccy).length()
+		var score := -d + sim.rng.randf() * 0.5
+		if score > best_score:
+			best_score = score
+			best = i
+	return best
+
+
+## Footprint must be buildable land owned by `city_id` (or unowned when city_id < 0),
+## with a one-tile gap to other buildings so streets remain walkable.
+func _can_place_footprint(city_id: int, x: int, y: int, size: int) -> bool:
+	var w := sim.world
+	for dy in range(-1, size + 1):
+		for dx in range(-1, size + 1):
+			var tx := x + dx
+			var ty := y + dy
+			var inside := dx >= 0 and dy >= 0 and dx < size and dy < size
+			if not w.in_bounds(tx, ty):
+				if inside:
+					return false
+				continue
+			var i := w.idx(tx, ty)
+			if w.building[i] != SimConst.BUILDING_ID_NONE:
+				return false
+			if inside:
+				if not w.is_walkable(i) or w.biome[i] == Defs.farmland_index:
+					return false
+				if city_id >= 0 and w.owner[i] != city_id:
+					return false
+				if city_id < 0 and w.owner[i] != SimConst.CITY_NONE:
+					return false
+	return true
+
+
+func _place_building(c: City, type: int, x: int, y: int, complete: bool) -> Building:
+	var w := sim.world
+	var b := Building.new()
+	b.id = sim.next_building_id
+	sim.next_building_id += 1
+	b.type = type
+	b.city = c.id
+	b.x = x
+	b.y = y
+	b.complete = complete
+	b.paid = complete
+	b.progress = float(b.def().work) if complete else 0.0
+	b.health = b.def().max_health
+	var s := b.def().size
+	for dy in s:
+		for dx in s:
+			var i := w.idx(x + dx, y + dy)
+			w.building[i] = b.id
+			w.mark_dirty(i)
+	sim.buildings[b.id] = b
+	c.buildings.append(b.id)
+	return b
+
+
+func pick_construction(c: City) -> Building:
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if not b.complete:
+			return b
+	return null
+
+
+func _affordable(c: City, b: Building) -> bool:
+	for res: String in b.def().cost:
+		if float(c.storage.get(res, 0.0)) < float(b.def().cost[res]):
+			return false
+	return true
+
+
+func try_pay(b: Building) -> bool:
+	if b.paid:
+		return true
+	var c: City = sim.cities.get(b.city, null)
+	if c == null:
+		return false
+	for res: String in b.def().cost:
+		if float(c.storage.get(res, 0.0)) < float(b.def().cost[res]):
+			return false
+	for res: String in b.def().cost:
+		c.take_resource(res, float(b.def().cost[res]))
+	b.paid = true
+	return true
+
+
+func add_build_progress(b: Building, amount: float) -> void:
+	b.progress += amount
+	if b.progress >= b.def().work:
+		b.complete = true
+		b.health = b.def().max_health
+		var c: City = sim.cities.get(b.city, null)
+		if c != null:
+			_recompute_capacity(c)
+			sim.history.record(sim.tick, HistoryLog.Kind.BUILDING, "%s completed a %s." % [c.name, b.def().name.to_lower()], {"city": c.id, "building": b.id}, b.center_tile(sim.world.width))
+		var s := b.def().size
+		for dy in s:
+			for dx in s:
+				sim.world.mark_dirty(sim.world.idx(b.x + dx, b.y + dy))
+
+
+func destroy_building(bid: int, reason: String) -> void:
+	var b: Building = sim.buildings.get(bid, null)
+	if b == null:
+		return
+	var w := sim.world
+	var s := b.def().size
+	for dy in s:
+		for dx in s:
+			var i := w.idx(b.x + dx, b.y + dy)
+			if w.building[i] == bid:
+				w.building[i] = SimConst.BUILDING_ID_NONE
+				w.mark_dirty(i)
+	sim.buildings.erase(bid)
+	var c: City = sim.cities.get(b.city, null)
+	if c == null:
+		return
+	var k := c.buildings.find(bid)
+	if k >= 0:
+		c.buildings.remove_at(k)
+	_recompute_capacity(c)
+	sim.history.record(sim.tick, HistoryLog.Kind.BUILDING, "A %s of %s was destroyed (%s)." % [b.def().name.to_lower(), c.name, reason], {"city": c.id}, b.center_tile(w.width))
+	if b.def().storage and not _has_storage(c):
+		abandon_city(c, "its town hall was destroyed")
+
+
+func _has_storage(c: City) -> bool:
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if b.complete and b.def().storage:
+			return true
+	return false
+
+
+func nearest_storage_tile(c: City, from_tile: int) -> int:
+	var w := sim.world
+	var fx := from_tile % w.width
+	var fy := from_tile / w.width
+	var best := c.center
+	var best_d := INF
+	for bid in c.buildings:
+		var b: Building = sim.buildings[bid]
+		if not b.complete or not b.def().storage:
+			continue
+		var t := b.center_tile(w.width)
+		var d := Vector2(t % w.width - fx, t / w.width - fy).length_squared()
+		if d < best_d:
+			best_d = d
+			best = t
+	return best
+
+
+## Adds goods to storage, discarding food beyond capacity (spoilage).
+func deposit(c: City, res: String, amount: float) -> void:
+	if res == "":
+		return
+	var cap := c.food_capacity if res == "food" else float(Defs.building_globals.get("base_%s_capacity" % res, 200))
+	var room := maxf(0.0, cap - float(c.storage.get(res, 0.0)))
+	c.add_resource(res, minf(room, amount))
+
+
+# ------------------------------------------------------------------ territory
+
+func _claim_disk(c: City, cx: int, cy: int, r: int) -> void:
+	var w := sim.world
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if dx * dx + dy * dy > r * r or not w.in_bounds(cx + dx, cy + dy):
+				continue
+			var i := w.idx(cx + dx, cy + dy)
+			if w.owner[i] == SimConst.CITY_NONE:
+				w.set_owner(i, c.id)
+				c.territory.append(i)
+
+
+func _expand_territory(c: City) -> void:
+	var w := sim.world
+	var target := TERRITORY_BASE + c.population() * TERRITORY_PER_PERSON
+	if c.territory.size() >= target:
+		return
+	var ccx := c.center % w.width
+	var ccy := c.center / w.width
+	var cand := {}
+	for i in c.territory:
+		var x := i % w.width
+		var y := i / w.width
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if not w.in_bounds(x + d.x, y + d.y):
+				continue
+			var n := w.idx(x + d.x, y + d.y)
+			if w.owner[n] != SimConst.CITY_NONE or cand.has(n):
+				continue
+			var dist := Vector2(x + d.x - ccx, y + d.y - ccy).length()
+			cand[n] = (w.fertility(n) * 2.0 if w.is_walkable(n) else -1.0) - dist * 0.15
+	var picked := 0
+	while picked < MAX_CLAIMS_PER_PLAN and not cand.is_empty():
+		var best := -1
+		var best_score := -INF
+		for n: int in cand:
+			if float(cand[n]) > best_score:
+				best_score = cand[n]
+				best = n
+		cand.erase(best)
+		w.set_owner(best, c.id)
+		c.territory.append(best)
+		picked += 1
+
+
+# ------------------------------------------------------------------ monthly
+
+func _monthly(c: City) -> void:
+	var u := sim.units
+	var pop := c.population()
+	if float(c.storage["food"]) < 1.0 and pop > 0:
+		c.starving_months += 1
+		if c.starving_months == 3:
+			sim.history.record(sim.tick, HistoryLog.Kind.FAMINE, "Famine struck %s." % c.name, {"city": c.id}, c.center)
+			sim.decisions.record(sim.tick, "shortage", c.name, "is starving",
+				[["food in store", float(c.storage["food"])], ["population", pop], ["food produced last month", float(c.produced["food"])]], {"city": c.id})
+	else:
+		c.starving_months = 0
+	c.roll_month()
+	if not sim.laws.is_on("reproduction"):
+		return
+	var room := c.housing - pop
+	if room <= 0 or float(c.storage["food"]) < pop * FOOD_PER_PERSON_FOR_BIRTH:
+		return
+	var fathers: Array[int] = []
+	var mothers: Array[int] = []
+	var cooldown := int(_human.birth_cooldown_years * SimConst.TICKS_PER_YEAR)
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s < 0:
+			continue
+		var age := u.age_years(s, sim.tick)
+		if age < _human.fertile_min or age > _human.fertile_max:
+			continue
+		if u.sex[s] == UnitStore.SEX_MALE:
+			fathers.append(s)
+		elif sim.tick - u.last_birth_tick[s] >= cooldown and u.hunger[s] < SimConst.HUNGER_URGENT:
+			mothers.append(s)
+	if fathers.is_empty():
+		return
+	for m in mothers:
+		if room <= 0:
+			break
+		if not sim.rng.chance(BIRTH_CHANCE):
+			continue
+		var f: int = fathers[sim.rng.randi_range(0, fathers.size() - 1)]
+		var child := sim.spawn_unit(sim.human_species, u.x[m], u.y[m], 0.0, u.id[m], u.id[f])
+		if child < 0:
+			continue
+		u.last_birth_tick[m] = sim.tick
+		u.city[child] = c.id
+		u.hunger[child] = 0.0
+		c.members.append(u.id[child])
+		c.births += 1
+		sim.month_births += 1
+		sim.total_births += 1
+		room -= 1
+
+
+func abandon_city(c: City, reason: String) -> void:
+	if not c.alive:
+		return
+	var u := sim.units
+	var w := sim.world
+	for mid in c.members:
+		var s := u.slot_for(mid)
+		if s >= 0:
+			u.city[s] = SimConst.CITY_NONE
+			u.job[s] = 0
+			u.carry_amount[s] = 0.0
+			u.carry_type[s] = 0
+	c.members = PackedInt64Array()
+	for i in c.territory:
+		if w.owner[i] == c.id:
+			w.set_owner(i, SimConst.CITY_NONE)
+		if w.biome[i] == Defs.farmland_index:
+			w.set_biome(i, Defs.biome_index("soil"))
+			sim.pathfinder.refresh_tile_cost(i)
+	for bid in c.buildings.duplicate():
+		var b: Building = sim.buildings.get(bid, null)
+		if b == null:
+			continue
+		var s := b.def().size
+		for dy in s:
+			for dx in s:
+				var i := w.idx(b.x + dx, b.y + dy)
+				w.building[i] = SimConst.BUILDING_ID_NONE
+				w.mark_dirty(i)
+		sim.buildings.erase(bid)
+	c.buildings = PackedInt32Array()
+	c.territory = PackedInt32Array()
+	c.fields = PackedInt32Array()
+	c.alive = false
+	sim.history.record(sim.tick, HistoryLog.Kind.CITY_ABANDONED, "%s was abandoned: %s." % [c.name, reason], {"city": c.id}, c.center)
+	sim.decisions.record(sim.tick, "settlement", c.name, "was abandoned", [["reason", reason]], {"city": c.id})
+
+
+## Called by world-editing code after a tile's biome changed.
+func on_tile_changed(i: int) -> void:
+	var w := sim.world
+	var bid := w.building[i]
+	if bid != SimConst.BUILDING_ID_NONE and not w.is_walkable(i):
+		destroy_building(bid, "the ground beneath it changed")
+
+
+func to_dict() -> Dictionary:
+	return {}
+
+
+func from_dict(_d: Dictionary) -> void:
+	pass

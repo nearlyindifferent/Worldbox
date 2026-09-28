@@ -1,0 +1,18 @@
+{
+  "_doc": "Building definitions. size is footprint in tiles (square). cost is consumed from city storage when construction starts. work is builder-ticks required. 'index' is the stable on-disk id.",
+  "buildings": [
+    {"id": "town_hall", "index": 0, "name": "Town Hall", "size": 2, "housing": 4, "storage": true,
+     "cost": {}, "work": 0, "max_health": 400, "sprite": "town_hall",
+     "desc": "Heart of a settlement. Stores the city's goods and shelters its first families."},
+    {"id": "house", "index": 1, "name": "House", "size": 2, "housing": 5, "storage": false,
+     "cost": {"wood": 12}, "work": 240, "max_health": 150, "sprite": "house",
+     "desc": "Shelters a household. Cities cannot grow beyond their housing."},
+    {"id": "granary", "index": 2, "name": "Granary", "size": 2, "housing": 0, "storage": true,
+     "cost": {"wood": 18, "stone": 4}, "work": 300, "max_health": 200, "sprite": "granary",
+     "food_capacity": 80, "min_population": 14,
+     "desc": "Raises the city's food storage limit and gives workers a nearer drop-off point."}
+  ],
+  "base_food_capacity": 60,
+  "base_wood_capacity": 200,
+  "base_stone_capacity": 200
+}

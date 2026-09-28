@@ -1,0 +1,7 @@
+.godot/
+*.import
+/build/
+/export/
+.DS_Store
+*.tmp
+/tools/out/
