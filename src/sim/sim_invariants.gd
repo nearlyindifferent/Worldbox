@@ -33,6 +33,15 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 				errs.append("unit %d not in its city's member list" % u.id[s])
 		if errs.size() >= max_errors:
 			return errs
+	# Derived movement cache must agree with the authoritative path (else reloads diverge).
+	var wp := sim.movement._wp
+	if wp.size() == u.capacity:
+		for s in u.capacity:
+			if u.alive[s] == 1 and u.state[s] == UnitStore.State.MOVING and wp[s] >= 0:
+				var p: PackedInt32Array = u.path.get(s, PackedInt32Array())
+				if u.path_pos[s] >= p.size() or p[u.path_pos[s]] != wp[s]:
+					errs.append("unit %d waypoint cache %d disagrees with path" % [u.id[s], wp[s]])
+					break
 	if alive_count != u.count:
 		errs.append("unit count %d != alive slots %d" % [u.count, alive_count])
 	if u.slot_of.size() != u.count:

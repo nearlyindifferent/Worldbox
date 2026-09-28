@@ -20,17 +20,25 @@ func _init(p_sim: Simulation) -> void:
 	sim = p_sim
 
 
+func dispatch(s: int, ev: int) -> void:
+	var u := sim.units
+	if ev == MovementSystem.EV_ARRIVED:
+		if u.task[s] == UnitStore.Task.GRAZE:
+			_start_graze(s)
+		else:
+			u.next_think[s] = sim.tick
+		return
+	if ev == MovementSystem.EV_BLOCKED:
+		u.next_think[s] = sim.tick
+		return
+	update(s)
+
+
 func update(s: int) -> void:
 	var u := sim.units
 	match u.state[s]:
 		UnitStore.State.MOVING:
-			var r := sim.movement.advance(s)
-			if r != MovementSystem.Result.MOVING:
-				u.state[s] = UnitStore.State.IDLE
-				if r == MovementSystem.Result.ARRIVED and u.task[s] == UnitStore.Task.GRAZE:
-					_start_graze(s)
-				else:
-					u.next_think[s] = sim.tick
+			pass  # movement is batched in MovementSystem.advance_all
 		UnitStore.State.WORKING:
 			u.task_timer[s] -= 1
 			if u.task_timer[s] <= 0:

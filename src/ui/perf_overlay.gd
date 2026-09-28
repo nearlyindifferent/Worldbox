@@ -32,7 +32,7 @@ static func report(g: Game) -> String:
 	lines.append("FPS %d   frame %.1f ms   draw calls %d" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
 	lines.append("sim %.2f ms/tick   %d ticks this frame (%.1f ms)   target %d t/s%s" % [float(sim.timings.get("tick_total", 0.0)) / 1000.0, g.ticks_last_frame, g.sim_ms_last_frame, int(g.ticks_per_second()), "  LAGGING" if g.sim_lagging else ""])
 	var parts := PackedStringArray()
-	for k in ["spatial", "vegetation", "life", "units", "civ", "monthly"]:
+	for k in ["spatial", "vegetation", "life", "movement", "units", "civ", "monthly"]:
 		parts.append("%s %.2f" % [k, float(sim.timings.get(k, 0.0)) / 1000.0])
 	lines.append("  " + "  ".join(parts) + "  (ms)")
 	lines.append("units %d (visible %d)   cities %d   buildings %d (visible %d)" % [sim.units.count, g.units_view.visible_count, sim.cities.size(), sim.buildings.size(), g.buildings_view.visible_count])

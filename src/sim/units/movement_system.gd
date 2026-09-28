@@ -3,13 +3,20 @@ extends RefCounted
 ## Moves units along cached tile paths. Sapients use A* (Pathfinder); animals use
 ## cheap direct steering that aborts when the next tile is not walkable.
 
-enum Result { MOVING, ARRIVED, BLOCKED }
 enum Plan { OK, PENDING, UNREACHABLE }
 
 const DIRECT_RANGE := 3.0  ## straight-line moves shorter than this skip A*
 
 var sim: Simulation
 var _speed := PackedFloat32Array()
+## Per-slot result of this tick's movement pass: 0 none, ARRIVED+1, BLOCKED+1.
+var events := PackedByteArray()
+## Derived cache of each mover's current waypoint tile (-1 = fetch from the path
+## dictionary). Avoids a dictionary lookup per unit per tick. Not saved.
+var _wp := PackedInt32Array()
+const EV_NONE := 0
+const EV_ARRIVED := 1
+const EV_BLOCKED := 2
 
 
 func _init(p_sim: Simulation) -> void:
@@ -30,6 +37,7 @@ func go_to(s: int, to_i: int, use_astar: bool) -> int:
 		u.path[s] = PackedInt32Array([to_i])
 		u.path_pos[s] = 0
 		u.state[s] = UnitStore.State.MOVING
+		_set_wp(s, to_i)
 		return Plan.OK
 	var dx := float(to_i % w) - float(from_i % w)
 	var dy := float(to_i / w) - float(from_i / w)
@@ -46,46 +54,98 @@ func go_to(s: int, to_i: int, use_astar: bool) -> int:
 		u.path[s] = p
 	u.path_pos[s] = 0
 	u.state[s] = UnitStore.State.MOVING
+	_set_wp(s, (u.path[s] as PackedInt32Array)[0])
 	return Plan.OK
 
 
-func advance(s: int) -> int:
+func _set_wp(s: int, v: int) -> void:
+	if _wp.size() != sim.units.capacity:
+		_wp.resize(sim.units.capacity)
+		_wp.fill(-1)
+	_wp[s] = v
+
+
+## Moves every non-frozen MOVING unit one tick in a single tight loop and records
+## arrivals/blocks in `events` for the AI dispatch pass.
+func advance_all() -> void:
 	var u := sim.units
-	var p: PackedInt32Array = u.path.get(s, PackedInt32Array())
-	var k := u.path_pos[s]
-	if k >= p.size():
-		u.path.erase(s)
-		return Result.ARRIVED
+	var cap := u.capacity
+	if events.size() != cap:
+		events.resize(cap)
+	events.fill(EV_NONE)
+	if _wp.size() != cap:
+		_wp.resize(cap)
+		_wp.fill(-1)
+	var alive := u.alive
+	var state := u.state
+	var flags := u.flags
+	var species := u.species
+	var xs := u.x
+	var ys := u.y
+	var path_pos := u.path_pos
+	var paths := u.path
+	var wp := _wp
+	var ev := events
+	var biome := sim.world.biome
+	var walk := Defs.biome_walkable
+	var cost_tab := Defs.biome_move_cost
+	var speed := _speed
 	var w := sim.world.width
-	var target := p[k]
-	var tx := float(target % w) + 0.5
-	var ty := float(target / w) + 0.5
-	var cur_i := int(u.y[s]) * w + int(u.x[s])
-	var cost: float = Defs.biome_move_cost[sim.world.biome[cur_i]]
-	var spd := _speed[u.species[s]] / (cost if cost > 0.0 else 1.0)
-	var dx := tx - u.x[s]
-	var dy := ty - u.y[s]
-	var d := sqrt(dx * dx + dy * dy)
-	if d <= spd:
-		u.x[s] = tx
-		u.y[s] = ty
-		k += 1
-		u.path_pos[s] = k
-		if k >= p.size():
-			u.path.erase(s)
-			return Result.ARRIVED
-		return Result.MOVING
-	var nx := u.x[s] + dx / d * spd
-	var ny := u.y[s] + dy / d * spd
-	var ni := int(ny) * w + int(nx)
-	if ni != cur_i and not sim.world.is_walkable(ni) and sim.world.is_walkable(cur_i):
-		u.path.erase(s)
-		return Result.BLOCKED
-	u.x[s] = nx
-	u.y[s] = ny
-	return Result.MOVING
+	var moving: int = UnitStore.State.MOVING
+	var idle: int = UnitStore.State.IDLE
+	var frozen_bit: int = UnitStore.Flag.FROZEN
+	for s in cap:
+		if alive[s] == 0 or state[s] != moving or (flags[s] & frozen_bit) != 0:
+			continue
+		var target := wp[s]
+		if target < 0:
+			var p0: PackedInt32Array = paths.get(s, PackedInt32Array())
+			var k0 := path_pos[s]
+			if k0 >= p0.size():
+				paths.erase(s)
+				state[s] = idle
+				ev[s] = EV_ARRIVED
+				continue
+			target = p0[k0]
+			wp[s] = target
+		var tx := float(target % w) + 0.5
+		var ty := float(target / w) + 0.5
+		var x := xs[s]
+		var y := ys[s]
+		var cur_i := int(y) * w + int(x)
+		var cost := cost_tab[biome[cur_i]]
+		var spd := speed[species[s]] / (cost if cost > 0.0 else 1.0)
+		var dx := tx - x
+		var dy := ty - y
+		var d := sqrt(dx * dx + dy * dy)
+		if d <= spd:
+			xs[s] = tx
+			ys[s] = ty
+			var k := path_pos[s] + 1
+			path_pos[s] = k
+			var p: PackedInt32Array = paths.get(s, PackedInt32Array())
+			if k >= p.size():
+				paths.erase(s)
+				wp[s] = -1
+				state[s] = idle
+				ev[s] = EV_ARRIVED
+			else:
+				wp[s] = p[k]
+			continue
+		var nx := x + dx / d * spd
+		var ny := y + dy / d * spd
+		var ni := int(ny) * w + int(nx)
+		if ni != cur_i and walk[biome[ni]] == 0 and walk[biome[cur_i]] == 1:
+			paths.erase(s)
+			wp[s] = -1
+			state[s] = idle
+			ev[s] = EV_BLOCKED
+			continue
+		xs[s] = nx
+		ys[s] = ny
 
 
 func stop(s: int) -> void:
 	sim.units.path.erase(s)
+	_set_wp(s, -1)
 	sim.units.state[s] = UnitStore.State.IDLE

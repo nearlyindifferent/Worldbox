@@ -35,6 +35,19 @@ func _init(p_sim: Simulation) -> void:
 	_jobs = Defs.jobs
 
 
+## Called by the simulation's dispatch pass only for units that need attention:
+## a movement event (arrived/blocked), timed work, a due think, or a hunger check.
+func dispatch(s: int, ev: int) -> void:
+	var u := sim.units
+	if ev == MovementSystem.EV_ARRIVED:
+		_on_arrive(s)
+		return
+	if ev == MovementSystem.EV_BLOCKED:
+		u.next_think[s] = sim.tick + 1
+		return
+	update(s)
+
+
 func update(s: int) -> void:
 	var u := sim.units
 	# Hunger interrupt: long trips and jobs are abandoned when food becomes urgent.
@@ -46,13 +59,7 @@ func update(s: int) -> void:
 		return
 	match u.state[s]:
 		UnitStore.State.MOVING:
-			var r := sim.movement.advance(s)
-			if r == MovementSystem.Result.ARRIVED:
-				u.state[s] = UnitStore.State.IDLE
-				_on_arrive(s)
-			elif r == MovementSystem.Result.BLOCKED:
-				u.state[s] = UnitStore.State.IDLE
-				u.next_think[s] = sim.tick + 1
+			pass  # movement is batched in MovementSystem.advance_all
 		UnitStore.State.WORKING:
 			u.task_timer[s] -= 1
 			if u.task_timer[s] <= 0:

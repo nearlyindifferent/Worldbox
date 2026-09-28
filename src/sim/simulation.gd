@@ -139,18 +139,40 @@ func step() -> void:
 	_time("life", t)
 
 	t = Time.get_ticks_usec()
+	movement.advance_all()
+	_time("movement", t)
+
+	# Decision dispatch: only units with a movement event, timed work, a due think,
+	# or (sapients) a possible hunger interrupt reach AI code.
+	t = Time.get_ticks_usec()
 	var alive := units.alive
 	var flags := units.flags
 	var species := units.species
+	var state := units.state
+	var next_think := units.next_think
+	var hunger := units.hunger
+	var ev := movement.events
 	var frozen_bit: int = UnitStore.Flag.FROZEN
+	var moving: int = UnitStore.State.MOVING
+	var idle: int = UnitStore.State.IDLE
 	var hs := human_species
+	var now := tick
+	var think := SimConst.THINK_INTERVAL
 	for s in units.capacity:
 		if alive[s] == 0 or (flags[s] & frozen_bit) != 0:
 			continue
+		var e := ev[s] if s < ev.size() else 0
+		if e == 0:
+			var st := state[s]
+			if st == moving:
+				if species[s] != hs or hunger[s] < SimConst.HUNGER_URGENT or (now + s) % think != 0:
+					continue
+			elif st == idle and now < next_think[s]:
+				continue
 		if species[s] == hs:
-			human_ai.update(s)
+			human_ai.dispatch(s, e)
 		else:
-			animal_ai.update(s)
+			animal_ai.dispatch(s, e)
 	_time("units", t)
 
 	t = Time.get_ticks_usec()
