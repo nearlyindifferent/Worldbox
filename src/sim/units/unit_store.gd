@@ -8,7 +8,7 @@ extends RefCounted
 enum State { IDLE, MOVING, WORKING, EATING, FLEEING, DEAD }
 ## Append new values at the end: task ids are stored in saves.
 enum Task { NONE, WANDER, FORAGE, GRAZE, FARM, CHOP, QUARRY, BUILD, DELIVER, EAT_STORE, HUNT, GO_HOME, FOUND_CITY, SEEK_LAND, FOLLOW, FIGHT, MARCH, FLEE }
-enum Flag { FROZEN = 1, INVULNERABLE = 2, FAVORITE = 4, SETTLER = 8 }
+enum Flag { FROZEN = 1, INVULNERABLE = 2, FAVORITE = 4, SETTLER = 8, IMMUNE = 16 }
 const TASK_NAMES := ["None", "Wandering", "Foraging", "Grazing", "Farming", "Chopping wood", "Quarrying stone", "Building", "Delivering goods", "Eating from stores", "Hunting", "Going home", "Founding a settlement", "Seeking dry land", "Following", "Fighting", "Marching to war", "Fleeing"]
 const SEX_MALE := 0
 const SEX_FEMALE := 1
@@ -46,6 +46,7 @@ var last_birth_tick := PackedInt64Array()
 var flags := PackedInt32Array()
 var kills := PackedInt32Array()
 var look := PackedInt32Array() ## packed cosmetic genes: skin/hair/wool indices
+var disease := PackedInt32Array() ## plague ticks remaining (0 = healthy)
 var name := PackedStringArray()
 
 var slot_of: Dictionary = {} ## id -> slot
@@ -72,7 +73,7 @@ static func _array_fields() -> PackedStringArray:
 	return PackedStringArray(["id", "alive", "species", "sex", "x", "y", "prev_x", "prev_y", "birth_tick",
 		"death_age", "health", "max_health", "hunger", "state", "task", "task_target", "task_timer", "job",
 		"city", "home", "mother", "father", "carry_type", "carry_amount", "next_think", "last_birth_tick",
-		"flags", "kills", "look", "name", "path_pos"])
+		"flags", "kills", "look", "name", "path_pos", "disease"])
 
 
 ## Fields that are logically authoritative (prev_x/prev_y excluded).
@@ -125,6 +126,7 @@ func allocate() -> int:
 	look[s] = 0
 	name[s] = ""
 	path_pos[s] = 0
+	disease[s] = 0
 	return s
 
 

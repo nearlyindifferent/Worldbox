@@ -26,7 +26,7 @@ const UNIT_TYPES := {
 	"mother": TYPE_PACKED_INT64_ARRAY, "father": TYPE_PACKED_INT64_ARRAY, "carry_type": TYPE_PACKED_BYTE_ARRAY,
 	"carry_amount": TYPE_PACKED_FLOAT32_ARRAY, "next_think": TYPE_PACKED_INT64_ARRAY, "last_birth_tick": TYPE_PACKED_INT64_ARRAY,
 	"flags": TYPE_PACKED_INT32_ARRAY, "kills": TYPE_PACKED_INT32_ARRAY, "look": TYPE_PACKED_INT32_ARRAY,
-	"name": TYPE_PACKED_STRING_ARRAY, "path_pos": TYPE_PACKED_INT32_ARRAY,
+	"name": TYPE_PACKED_STRING_ARRAY, "path_pos": TYPE_PACKED_INT32_ARRAY, "disease": TYPE_PACKED_INT32_ARRAY,
 }
 const TOP_KEYS := {
 	"schema": TYPE_INT, "seed": TYPE_INT, "shape": TYPE_STRING, "tick": TYPE_INT, "rng_state": TYPE_INT,
@@ -35,7 +35,7 @@ const TOP_KEYS := {
 	"decisions": TYPE_DICTIONARY, "stats": TYPE_DICTIONARY, "month_births": TYPE_INT, "month_deaths": TYPE_INT,
 	"deaths_by_cause": TYPE_DICTIONARY, "total_births": TYPE_INT, "total_deaths": TYPE_INT, "deceased": TYPE_DICTIONARY,
 	"pop_milestone": TYPE_INT, "civ_state": TYPE_DICTIONARY, "components": TYPE_DICTIONARY, "undo": TYPE_ARRAY,
-	"kingdoms": TYPE_ARRAY, "next_kingdom_id": TYPE_INT, "realm": TYPE_DICTIONARY,
+	"kingdoms": TYPE_ARRAY, "next_kingdom_id": TYPE_INT, "realm": TYPE_DICTIONARY, "disasters": TYPE_DICTIONARY,
 }
 
 
@@ -54,6 +54,9 @@ static func validate(d: Dictionary) -> String:
 	var wd: Dictionary = d["world"]
 	var size := int(wd["w"]) * int(wd["h"])
 	err = _units(d["units"], size, int(wd["w"]), int(wd["h"]))
+	if err != "":
+		return err
+	err = _disasters(d["disasters"], size)
 	if err != "":
 		return err
 	if (d["cities"] as Array).size() > MAX_CITIES or (d["buildings"] as Array).size() > MAX_BUILDINGS:
@@ -99,6 +102,38 @@ static func _world(wd: Dictionary) -> String:
 	for i in biome.size():
 		if biome[i] >= nb:
 			return "invalid biome index %d at tile %d" % [biome[i], i]
+	return ""
+
+
+static func _disasters(dd: Dictionary, world_size: int) -> String:
+	for k: String in ["burning", "fuel", "lava", "lava_t", "lava_flow"]:
+		if typeof(dd.get(k)) != TYPE_PACKED_INT32_ARRAY:
+			return "disasters.%s missing" % k
+	if (dd["burning"] as PackedInt32Array).size() != (dd["fuel"] as PackedInt32Array).size():
+		return "disasters fire lists mismatch"
+	var nl := (dd["lava"] as PackedInt32Array).size()
+	if (dd["lava_t"] as PackedInt32Array).size() != nl or (dd["lava_flow"] as PackedInt32Array).size() != nl:
+		return "disasters lava lists mismatch"
+	if (dd["burning"] as PackedInt32Array).size() > DisasterSystem.MAX_BURNING or nl > world_size:
+		return "too many burning tiles"
+	var seen := {}
+	for i in dd["burning"]:
+		if i < 0 or i >= world_size or seen.has(i):
+			return "burning tile out of range or duplicated"
+		seen[i] = true
+	for i in dd["lava"]:
+		if i < 0 or i >= world_size:
+			return "lava tile out of range"
+	if typeof(dd.get("quakes")) != TYPE_ARRAY or typeof(dd.get("last_record")) != TYPE_DICTIONARY:
+		return "disasters bookkeeping missing"
+	for q: Variant in dd["quakes"]:
+		if typeof(q) != TYPE_DICTIONARY:
+			return "quake entry invalid"
+		for k: String in ["x", "y", "r", "left"]:
+			if typeof((q as Dictionary).get(k)) != TYPE_INT:
+				return "quake.%s missing" % k
+		if int(q["r"]) < 0 or int(q["r"]) > 64:
+			return "quake radius out of range"
 	return ""
 
 

@@ -1,7 +1,7 @@
 shader_type canvas_item;
 // Terrain + territory in one pass. Each fragment finds its tile, samples the
 // procedural tile atlas, then layers shading, shoreline, borders and overlays.
-// data_tex:  R biome index | G variant(2) veg band(2)<<2 wood band(2)<<4 | B hillshade
+// data_tex:  R biome index | G variant(2) veg band(2)<<2 wood band(2)<<4 | B hillshade | A fire (0/255)
 // owner_tex: R,G owner city id (lo, hi byte) | B color index + 1 (0 = unowned) | A kingdom hash
 
 uniform sampler2D data_tex : filter_nearest;
@@ -13,6 +13,7 @@ uniform vec2 world_size = vec2(256.0, 256.0);
 uniform int farmland_index = 14;
 uniform int forest_index = 6;
 uniform int grass_index = 5;
+uniform int lava_index = 16;
 uniform int max_water_index = 2;
 uniform bool show_territory = true;
 uniform float territory_fill = 0.16;
@@ -91,6 +92,25 @@ void fragment() {
 
 	float hs = float(d.b) / 255.0;
 	c.rgb *= 0.80 + 0.40 * hs;
+
+	if (b == lava_index) {
+		float pulse = 0.5 + 0.5 * sin(anim_time * 2.4 + hash12(vec2(t)) * 6.2831 + float(px.x + px.y) * 0.6);
+		c.rgb = mix(c.rgb, vec3(1.0, 0.86, 0.4), pulse * 0.4);
+	}
+	if (d.a > 0) {
+		// Burning tile: charred ground under flickering pixel flames.
+		c.rgb *= 0.45;
+		float ft = floor(anim_time * 9.0);
+		float colh = 2.0 + 5.5 * hash12(vec2(float(px.x) + float(t.x) * 8.0, ft + float(t.y) * 3.0));
+		float yy = 7.0 - float(px.y);
+		if (yy < colh) {
+			float k = yy / colh;
+			vec3 fc = mix(vec3(1.0, 0.93, 0.5), vec3(0.92, 0.22, 0.04), k);
+			if (hash12(vec2(px) + vec2(t) * 3.1 + ft) > 0.1 + k * 0.45) c.rgb = fc;
+		} else {
+			c.rgb += vec3(0.25, 0.08, 0.0) * (1.0 - (yy - colh) / 8.0);
+		}
+	}
 
 	if (is_water(b)) {
 		float ph = hash12(vec2(t)) * 6.2831;

@@ -97,6 +97,8 @@ func update_view(view_rect_tiles: Rect2, zoom: float, delta: float) -> void:
 				pos += Vector2(4, 7) * (1.0 - scale_f)
 		_body.add(pos + Vector2(0, 1), scale_f, Color.WHITE, AssetForge.UF.SHADOW, 0, 0, 0)
 		_body.add(pos, scale_f, tint, frame, ga, gb, flags)
+		if u.disease[s] > 0:
+			_items.add(pos + Vector2(0, -6 - ((step + s) % 2)) * scale_f, scale_f, Color.WHITE, AssetForge.UF.SICK, 0, 0, 0)
 	_body.commit()
 	_items.commit()
 	@warning_ignore("integer_division")

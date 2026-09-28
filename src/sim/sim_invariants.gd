@@ -131,4 +131,14 @@ static func check(sim: Simulation, max_errors: int = 50) -> PackedStringArray:
 			break
 	if owned_tiles != owned_total:
 		errs.append("owned tiles %d != sum of territories %d" % [owned_tiles, owned_total])
+	var dis := sim.disasters
+	var fire_count := 0
+	for i in w.size:
+		fire_count += dis.on_fire[i]
+	if fire_count != dis.burning.size() or dis.fuel.size() != dis.burning.size():
+		errs.append("fire lookup out of sync (%d lit, %d listed)" % [fire_count, dis.burning.size()])
+	for i in dis.burning:
+		if dis.on_fire[i] != 1:
+			errs.append("burning tile %d not marked" % i)
+			break
 	return errs

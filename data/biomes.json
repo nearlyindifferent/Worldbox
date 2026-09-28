@@ -15,6 +15,8 @@
     {"id": "swamp",        "index": 11, "name": "Swamp",         "water": false, "walkable": true,  "move_cost": 2.2, "fertility": 0.45, "veg_max": 180, "veg_food": 0.7, "wood": 60,  "pattern": "swamp",      "colors": ["#2c3c26", "#3c4e30", "#4e643a", "#6a5a3a"]},
     {"id": "volcanic",     "index": 12, "name": "Ashlands",      "water": false, "walkable": true,  "move_cost": 1.6, "fertility": 0.15, "veg_max": 20,  "veg_food": 0.1, "wood": 0,   "pattern": "volcanic",   "colors": ["#1e1a1c", "#2e2628", "#433638", "#e0602a"]},
     {"id": "mystic",       "index": 13, "name": "Glimmerwood",   "water": false, "walkable": true,  "move_cost": 1.2, "fertility": 0.8,  "veg_max": 255, "veg_food": 0.9, "wood": 120, "pattern": "mystic",     "colors": ["#3a2a5e", "#523c86", "#6e56ae", "#6ee0d0"]},
-    {"id": "farmland",     "index": 14, "name": "Farmland",      "water": false, "walkable": true,  "move_cost": 1.1, "fertility": 1.0,  "veg_max": 0,   "veg_food": 0.0, "wood": 0,   "pattern": "farmland",   "colors": ["#5a3a24", "#704a2e", "#8a5e3a", "#d8b848"]}
+    {"id": "farmland",     "index": 14, "name": "Farmland",      "water": false, "walkable": true,  "move_cost": 1.1, "fertility": 1.0,  "veg_max": 0,   "veg_food": 0.0, "wood": 0,   "pattern": "farmland",   "colors": ["#5a3a24", "#704a2e", "#8a5e3a", "#d8b848"]},
+    {"id": "scorched",     "index": 15, "name": "Scorched Land", "water": false, "walkable": true,  "move_cost": 1.0, "fertility": 0.5,  "veg_max": 200, "veg_food": 0.4, "wood": 0,   "pattern": "scorched",   "colors": ["#2e2824", "#4a403a", "#62564e", "#d86a2a"]},
+    {"id": "lava",         "index": 16, "name": "Lava",          "water": false, "walkable": false, "move_cost": 0.0, "fertility": 0.0,  "veg_max": 0,   "veg_food": 0.0, "wood": 0,   "pattern": "lava",       "colors": ["#7a1a0c", "#c83a14", "#f07a1e", "#ffd25a"]}
   ]
 }

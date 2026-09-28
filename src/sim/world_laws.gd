@@ -14,6 +14,7 @@ const DEFAULTS := {
 	"diplomacy": true,
 	"wars": true,
 	"rebellions": true,
+	"natural_disasters": true,
 }
 const DESCRIPTIONS := {
 	"hunger": "Creatures grow hungry and starve without food.",
@@ -27,6 +28,7 @@ const DESCRIPTIONS := {
 	"diplomacy": "Kingdoms form opinions of each other.",
 	"wars": "Kingdoms may declare war.",
 	"rebellions": "Disloyal cities may rise up and break away.",
+	"natural_disasters": "Lightning wildfires and plague outbreaks happen on their own.",
 }
 
 var values: Dictionary = DEFAULTS.duplicate()

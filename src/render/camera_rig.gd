@@ -20,6 +20,8 @@ var _drag_last := Vector2.ZERO
 var input_enabled := true
 ## Active touch points (index -> screen position) for two-finger pan / pinch.
 var _touches := {}
+var _shake_amp := 0.0
+var _shake_left := 0.0
 
 
 func multi_touch_active() -> bool:
@@ -126,7 +128,20 @@ func _screen_to_world_target(screen_pos: Vector2) -> Vector2:
 	return target_pos + (screen_pos - vp * 0.5) / target_zoom
 
 
+## Screen shake for quakes and impacts (presentation only; amplitude in screen pixels).
+func shake(amplitude: float, duration: float) -> void:
+	_shake_amp = maxf(_shake_amp, amplitude)
+	_shake_left = maxf(_shake_left, duration)
+
+
 func _process(delta: float) -> void:
+	if _shake_left > 0.0:
+		_shake_left -= delta
+		var a := _shake_amp * clampf(_shake_left * 2.0, 0.0, 1.0) / maxf(zoom.x, 0.01)
+		offset = Vector2(randf_range(-a, a), randf_range(-a, a))
+		if _shake_left <= 0.0:
+			_shake_amp = 0.0
+			offset = Vector2.ZERO
 	var move := Vector2.ZERO
 	if input_enabled and not _text_focused():
 		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):

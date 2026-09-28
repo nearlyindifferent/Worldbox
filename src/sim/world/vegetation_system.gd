@@ -42,6 +42,7 @@ func update() -> void:
 	var grass := Defs.grassland_index
 	var forest := Defs.forest_index
 	var forest_wood: int = (Defs.biomes[forest] as Defs.BiomeDef).wood
+	var scorched := Defs.biome_index("scorched")
 	for c in range(phase, n_chunks, SimConst.VEG_CYCLE_TICKS):
 		var x0 := (c % w.chunks_x) * SimConst.CHUNK
 		var y0 := (c / w.chunks_x) * SimConst.CHUNK
@@ -73,7 +74,11 @@ func update() -> void:
 					var nv := mini(vmax, v + int(SimConst.VEG_GROWTH * w.fertility(i)) + 1)
 					w.vegetation[i] = nv
 					changed = changed or (nv >> 6) != (v >> 6)
-				if b == forest and w.wood[i] < forest_wood:
+				if b == scorched and w.vegetation[i] >= vmax:
+					w.set_biome(i, grass)
+					w.vegetation[i] = vmax
+					changed = true
+				elif b == forest and w.wood[i] < forest_wood:
 					w.wood[i] = mini(forest_wood, w.wood[i] + 9)
 				elif spread and b == forest and sim.rng.chance(SimConst.FOREST_DIEBACK_CHANCE):
 					w.set_biome(i, grass)

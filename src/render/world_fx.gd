@@ -16,16 +16,27 @@ var unit_alpha: float = 1.0
 var show_paths := false
 var show_targets := false
 var _effects: Array[Dictionary] = []
+var _time := 0.0
+const MAX_SMOKE := 160
 
 
-func add_effect(kind: String, tile: Vector2i, radius: int = 1) -> void:
-	_effects.append({"kind": kind, "tile": tile, "r": radius, "t": 0.0})
+func add_effect(kind: String, tile: Vector2i, radius: int = 1, duration: float = 0.0) -> void:
+	var life := 0.7
+	match kind:
+		"conquest":
+			life = 1.6
+		"meteor":
+			life = 1.5
+		"quake":
+			life = maxf(1.0, duration)
+	_effects.append({"kind": kind, "tile": tile, "r": radius, "t": 0.0, "life": life})
 
 
 func _process(delta: float) -> void:
+	_time += delta
 	for e in _effects:
 		e["t"] = float(e["t"]) + delta
-	_effects = _effects.filter(func(e: Dictionary) -> bool: return float(e["t"]) < (1.6 if e["kind"] == "conquest" else 0.7))
+	_effects = _effects.filter(func(e: Dictionary) -> bool: return float(e["t"]) < float(e["life"]))
 	queue_redraw()
 
 
@@ -62,6 +73,7 @@ func _draw() -> void:
 				var tp := Vector2(ti % sim.world.width + 0.5, ti / sim.world.width + 0.5) * T
 				draw_line(Vector2(sim.units.x[os], sim.units.y[os]) * T, tp, Color(1, 0.5, 0.2, 0.5), line * 0.7)
 				draw_rect(Rect2(tp - Vector2(2, 2), Vector2(4, 4)), Color(1, 0.5, 0.2, 0.8), false, line * 0.7)
+	_draw_smoke()
 	if brush_visible and brush_tile.x >= 0:
 		_draw_brush(line)
 	for e in _effects:
@@ -78,6 +90,31 @@ func _draw_path(s: int, col: Color, width: float) -> void:
 		pts.append(Vector2(p[k] % w + 0.5, p[k] / w + 0.5) * T)
 	if pts.size() >= 2:
 		draw_polyline(pts, col, width)
+
+
+## Grey puffs drifting up from a sample of the burning tiles in view.
+func _draw_smoke() -> void:
+	var dis := sim.disasters
+	if dis == null or dis.burning.is_empty():
+		return
+	var rect := get_viewport().get_canvas_transform().affine_inverse() * get_viewport_rect()
+	var vt := Rect2(rect.position / T, rect.size / T).grow(1.0)
+	var w := sim.world.width
+	var stride := maxi(1, dis.burning.size() / (MAX_SMOKE * 3))
+	var drawn := 0
+	for k in range(0, dis.burning.size(), stride):
+		var i := dis.burning[k]
+		var p := Vector2(i % w, i / w)
+		if not vt.has_point(p):
+			continue
+		var seed_f := float((i * 7919) % 97) / 97.0
+		for m in 2:
+			var ph := fmod(_time * 0.6 + seed_f + m * 0.5, 1.0)
+			var c := (p + Vector2(0.5 + sin(ph * 5.0 + seed_f * 9.0) * 0.3, 0.2 - ph * 2.2)) * T
+			draw_circle(c, 1.5 + ph * 3.5, Color(0.22, 0.2, 0.2, 0.45 * (1.0 - ph)))
+		drawn += 1
+		if drawn >= MAX_SMOKE:
+			break
 
 
 ## Tile-aligned brush outline: only edges between inside/outside tiles are drawn.
@@ -102,7 +139,7 @@ func _draw_brush(line: float) -> void:
 
 
 func _draw_effect(e: Dictionary, line: float) -> void:
-	var t: float = e["t"] / 0.7
+	var t: float = e["t"] / float(e["life"])
 	var tile: Vector2i = e["tile"]
 	var c := (Vector2(tile) + Vector2(0.5, 0.5)) * T
 	var r := float(e["r"]) * T
@@ -137,6 +174,45 @@ func _draw_effect(e: Dictionary, line: float) -> void:
 			var tt: float = e["t"] / 1.6
 			draw_arc(c, 6.0 + tt * 40.0, 0, TAU, 40, Color(1.0, 0.85, 0.3, 1.0 - tt), 3.0)
 			draw_arc(c, 3.0 + tt * 26.0, 0, TAU, 40, Color(1.0, 1.0, 1.0, 0.8 * (1.0 - tt)), 2.0)
+		"fire", "rain", "plague":
+			var pc := Color(1.0, 0.55, 0.15)
+			if e["kind"] == "rain":
+				pc = Color(0.55, 0.8, 1.0)
+			elif e["kind"] == "plague":
+				pc = Color(0.55, 0.9, 0.3)
+			for k in 12:
+				var ang := k * 2.399 + float(tile.x * 13 + tile.y)
+				var rr := r * 0.9 * fmod(k * 0.37, 1.0) + 2.0
+				var p := c + Vector2(cos(ang), sin(ang)) * rr
+				if e["kind"] == "rain":
+					p.y += -18.0 + t * 20.0
+					draw_line(p, p + Vector2(-1, 4), Color(pc, 0.9 * (1.0 - t)), line * 1.2)
+				else:
+					p.y -= t * 10.0
+					draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(pc, 1.0 - t))
+		"meteor":
+			var mt: float = e["t"]
+			if mt < 0.35:
+				# Incoming streak from the upper right.
+				var f := mt / 0.35
+				var head := c + Vector2(260, -420) * (1.0 - f)
+				draw_line(head, head + Vector2(60, -95), Color(1.0, 0.7, 0.3, 0.5), 5.0 * line + 2.0)
+				draw_circle(head, 5.0 + 3.0 * f, Color(1.0, 0.95, 0.7, 0.95))
+			else:
+				var f2 := (mt - 0.35) / 1.15
+				draw_circle(c, r * (0.6 + f2), Color(1.0, 0.85, 0.5, 0.55 * (1.0 - f2)))
+				draw_arc(c, r * (0.8 + f2 * 2.4), 0, TAU, 48, Color(1.0, 0.95, 0.85, 0.8 * (1.0 - f2)), 3.0 * line + 1.0)
+				for k in 14:
+					var ang := k * TAU / 14.0 + float(tile.x)
+					var p := c + Vector2(cos(ang), sin(ang)) * r * (0.5 + f2 * 1.6) - Vector2(0, 30.0 * f2 * (1.0 - f2))
+					draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.45, 0.35, 0.3, 0.9 * (1.0 - f2)))
+		"quake":
+			var qa := 1.0 - t
+			for k in 18:
+				var ang := k * TAU / 18.0 + float(tile.y)
+				var dist := r * (0.2 + fmod(float(k * 37 % 11) / 11.0 + t * 1.5, 1.0) * 0.8)
+				var p := c + Vector2(cos(ang), sin(ang)) * dist
+				draw_circle(p, 2.0 + 3.0 * fmod(t * 3.0 + k * 0.13, 1.0), Color(0.62, 0.52, 0.4, 0.45 * qa))
 		"terrain":
 			for k in 8:
 				var ang := k * TAU / 8.0

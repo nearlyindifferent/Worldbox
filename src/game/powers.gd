@@ -8,6 +8,7 @@ const CATEGORIES := [
 	{"id": "terrain", "name": "Terrain", "icon": "raise", "powers": ["raise", "lower", "paint_grass", "paint_soil", "paint_sand", "paint_forest", "paint_hills", "paint_mountain", "paint_snow", "paint_desert", "paint_swamp", "paint_ash", "paint_mystic", "paint_shallow", "paint_ocean", "paint_deep"]},
 	{"id": "life", "name": "Life", "icon": "spawn_human", "powers": ["spawn_human", "spawn_sheep"]},
 	{"id": "divine", "name": "Divine", "icon": "smite", "powers": ["smite", "bless"]},
+	{"id": "disasters", "name": "Disasters", "icon": "fire", "powers": ["fire", "rain", "meteor", "earthquake", "volcano", "plague"]},
 	{"id": "diplomacy", "name": "Diplomacy", "icon": "crown", "powers": ["incite_war", "forge_peace", "spark_rebellion"]},
 ]
 
@@ -33,6 +34,12 @@ const DEFS := {
 	"spawn_sheep": {"name": "Woolbacks", "desc": "Place grazing herd animals. They breed where grass is plentiful.", "brush": true, "repeat": 0.25},
 	"smite": {"name": "Smite", "desc": "Strike every creature under the brush with lightning.", "brush": true, "repeat": 0.3},
 	"bless": {"name": "Blessing", "desc": "Fully heal and feed every creature under the brush.", "brush": true, "repeat": 0.3},
+	"fire": {"name": "Wildfire", "desc": "Set the land ablaze. Forests burn fiercely, grass less so; flames leave scorched ground that slowly regrows.", "brush": true, "repeat": 0.2},
+	"rain": {"name": "Rain", "desc": "Douse fires, cool lava and green the land under the brush.", "brush": true, "repeat": 0.15},
+	"meteor": {"name": "Meteor", "desc": "Call down a falling star. Leaves a smoking crater of lava.", "brush": true, "repeat": 0.8},
+	"earthquake": {"name": "Earthquake", "desc": "Shake the ground: buildings collapse and a fissure tears open.", "brush": true, "repeat": 0.0},
+	"volcano": {"name": "Volcano", "desc": "Raise a volcano that spews lava downhill. Lava cools into ashlands.", "brush": true, "repeat": 0.0},
+	"plague": {"name": "Plague", "desc": "Infect creatures under the brush. Sickness spreads to neighbours; survivors become immune.", "brush": true, "repeat": 0.4},
 	"incite_war": {"name": "Incite War", "desc": "Click a city: its kingdom declares war on its nearest neighbouring kingdom.", "brush": false, "repeat": 0.0},
 	"forge_peace": {"name": "Forge Peace", "desc": "Click a city: its kingdom makes peace with all its enemies.", "brush": false, "repeat": 0.0},
 	"spark_rebellion": {"name": "Spark Rebellion", "desc": "Click a city of a larger kingdom: it rises up and breaks away.", "brush": false, "repeat": 0.0},
@@ -57,6 +64,8 @@ static func effect_kind(power: String) -> String:
 		return "spawn"
 	if power in ["incite_war", "forge_peace", "spark_rebellion"]:
 		return "diplomacy"
+	if power in ["fire", "rain", "meteor", "earthquake", "volcano", "plague"]:
+		return "disaster"
 	return "terrain"
 
 
@@ -68,4 +77,6 @@ static func brush_color(power: String) -> Color:
 			return Color(1.0, 0.9, 0.45, 0.95)
 		"spawn":
 			return Color(0.55, 1.0, 0.6, 0.95)
+		"disaster":
+			return Color(0.6, 0.9, 1.0, 0.95) if power == "rain" else (Color(0.6, 0.95, 0.35, 0.95) if power == "plague" else Color(1.0, 0.55, 0.2, 0.95))
 	return Color(1.0, 0.95, 0.75, 0.9)

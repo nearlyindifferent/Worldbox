@@ -15,18 +15,19 @@ const BLD_W := 16
 const BLD_H := 24
 const ICON := 16
 
-enum Mat { NONE, OUTLINE, SKIN, CLOTHES, HAIR, WOOL, WHITE, FACE, LEG, WALL = 10, WALL_SHADE, ROOF, ROOF_SHADE, WOOD, WINDOW, STONE, STONE_SHADE, BANNER, DIRT, WOOD_LIGHT }
+enum Mat { NONE, OUTLINE, SKIN, CLOTHES, HAIR, WOOL, WHITE, FACE, LEG, WALL = 10, WALL_SHADE, ROOF, ROOF_SHADE, WOOD, WINDOW, STONE, STONE_SHADE, BANNER, DIRT, WOOD_LIGHT, SICK, EMBER }
 
 ## Fixed material colors; instance-driven ones (skin, clothes, hair, wool, roof, banner) are placeholders.
 const MAT_COLORS := {
 	Mat.OUTLINE: "#1c1418", Mat.WHITE: "#f4f0e8", Mat.FACE: "#3a302a", Mat.LEG: "#2e2428",
 	Mat.WALL: "#c9a26b", Mat.WALL_SHADE: "#9c7a4e", Mat.WOOD: "#5a3a22", Mat.WINDOW: "#f2d27a",
 	Mat.STONE: "#9a948c", Mat.STONE_SHADE: "#66605c", Mat.DIRT: "#6b4a30", Mat.WOOD_LIGHT: "#8f6440",
+	Mat.SICK: "#8ad04a", Mat.EMBER: "#f08a2a",
 }
 
 ## Unit atlas frame indices.
 enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW,
-	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK }
+	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
 enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D }
@@ -159,6 +160,31 @@ static func _draw_tile(img: Image, b: Defs.BiomeDef, v: int, ox: int, oy: int, r
 			var y := rng.randi_range(0, 5)
 			for k in 4:
 				_px(img, ox + x + k, oy + y + (k % 2), acc)
+		"scorched":
+			for k in 6:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
+			for k in 3:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), dark)
+			if v % 2 == 0:
+				var sx := rng.randi_range(1, 5)
+				var sy := rng.randi_range(2, 5)
+				_px(img, ox + sx, oy + sy, Color("#120e0c"))
+				_px(img, ox + sx, oy + sy + 1, Color("#120e0c"))
+				_px(img, ox + sx + 1, oy + sy + 1, Color("#120e0c"))
+			if v == 1:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), acc)
+		"lava":
+			for k in 3:
+				var x := rng.randi_range(0, 5)
+				var y := rng.randi_range(0, 7)
+				_hline(img, ox + x, oy + y, 3, dark)
+			for k in 4:
+				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
+			var lx := rng.randi_range(1, 5)
+			var ly := rng.randi_range(1, 5)
+			_px(img, ox + lx, oy + ly, acc)
+			_px(img, ox + lx + 1, oy + ly, acc)
+			_px(img, ox + lx, oy + ly + 1, light)
 		"mystic":
 			for k in 6:
 				_px(img, ox + rng.randi_range(0, 7), oy + rng.randi_range(0, 7), light)
@@ -332,6 +358,13 @@ static func _draw_unit_frame(img: Image, f: int, ox: int, oy: int) -> void:
 				for y in range(0, 7):
 					_m(img, x0 + 5, oy + y, Mat.WOOD_LIGHT)
 				_m(img, x0 + 5, oy - 1 + 1, Mat.WHITE, 110)
+		UF.SICK:
+			# Three green bubbles rising over a plague victim's head.
+			_m(img, ox + 3, oy + 6, Mat.SICK)
+			_m(img, ox + 4, oy + 6, Mat.SICK, 90)
+			_m(img, ox + 5, oy + 4, Mat.SICK, 150)
+			_m(img, ox + 2, oy + 3, Mat.SICK)
+			_m(img, ox + 4, oy + 1, Mat.SICK, 110)
 		UF.SHADOW:
 			for x in range(1, 7):
 				_m(img, ox + x, oy + 7, Mat.OUTLINE, 60)
@@ -511,6 +544,7 @@ const ICON_IDS := ["inspect", "raise", "lower", "paint_grass", "paint_soil", "pa
 	"paint_ocean", "paint_deep", "paint_mountain", "paint_hills", "paint_forest", "paint_desert", "paint_snow",
 	"paint_swamp", "paint_ash", "paint_mystic", "spawn_human", "spawn_sheep", "smite", "bless", "undo",
 	"pause", "play", "fast", "faster", "fastest", "save", "load", "history", "admin", "close", "plus", "minus",
+	"fire", "rain", "meteor", "earthquake", "volcano", "plague",
 	"people", "city", "food", "wood", "stone", "house", "star", "skull", "heart", "perf", "world", "follow",
 	"incite_war", "forge_peace", "spark_rebellion", "crown", "kingdom"]
 
@@ -669,6 +703,40 @@ static func _draw_icon(img: Image, id: String, ox: int) -> void:
 			_px(img, ox + 4, 7, Color("#e05a4a"))
 			_px(img, ox + 7, 7, Color("#3c6ec8"))
 			_px(img, ox + 10, 7, Color("#3ca05a"))
+		"fire":
+			_pattern(img, ox + 3, 1, ["....#.....", "....##....", "...###..#.", "..####.##.", ".########.", ".#########", "##########", "##########", ".########.", "..######.."], Color("#e0501c"))
+			_pattern(img, ox + 5, 5, ["..#...", ".###..", ".####.", "######", ".####."], Color("#f7a531"))
+			_pattern(img, ox + 6, 8, [".##.", "####", ".##."], Color("#fff0a0"))
+		"rain":
+			_pattern(img, ox + 2, 2, ["...####.....", ".########...", "###########.", "############", ".##########."], Color("#c8d4e4"))
+			for k in 4:
+				_px(img, ox + 3 + k * 3, 9 + (k % 2) * 2, Color("#6ab0f0"))
+				_px(img, ox + 3 + k * 3, 10 + (k % 2) * 2, Color("#6ab0f0"))
+				_px(img, ox + 2 + k * 3, 11 + (k % 2) * 2, Color("#3c80c8"))
+		"meteor":
+			for k in 7:
+				_px(img, ox + 13 - k, 1 + k, Color("#f7a531"))
+				_px(img, ox + 14 - k, 1 + k, Color("#e0501c"))
+			_circle(img, ox + 5, 10, 3, Color("#6a5a52"), true)
+			_px(img, ox + 4, 9, Color("#a8988a"))
+			_px(img, ox + 6, 11, Color("#3a302c"))
+		"earthquake":
+			_rect(img, ox + 1, 10, 14, 5, Color("#7a5a3a"))
+			_hline(img, ox + 1, 10, 14, Color("#6aa83c"))
+			for p: Vector2i in [Vector2i(7, 10), Vector2i(8, 11), Vector2i(7, 12), Vector2i(8, 13), Vector2i(9, 14)]:
+				_px(img, ox + p.x, p.y, ink)
+			for k in 3:
+				_hline(img, ox + 3 + k * 4, 3 + (k % 2) * 2, 2, paper)
+				_hline(img, ox + 2 + k * 4, 6 + (k % 2) * 2, 2, paper)
+		"volcano":
+			_pattern(img, ox + 1, 6, ["....####....", "...######...", "..########..", ".##########.", "############", "############"], Color("#4a3a36"))
+			_pattern(img, ox + 5, 6, ["####", ".##.", ".#.."], Color("#f07a1e"))
+			_pattern(img, ox + 4, 1, [".#..#.", "..##..", "#.##.#", ".####."], Color("#f7a531"))
+		"plague":
+			_pattern(img, ox + 3, 2, [".#####.", "#######", "#.###.#", "#######", ".##.##.", ".#####.", ".#.#.#."], Color("#9ad05a"))
+			_px(img, ox + 12, 10, Color("#6aa83c"))
+			_px(img, ox + 13, 12, Color("#6aa83c"))
+			_px(img, ox + 2, 12, Color("#6aa83c"))
 		"follow":
 			_circle(img, ox + 8, 8, 5, paper, false)
 			_circle(img, ox + 8, 8, 1, gold, true)

@@ -46,6 +46,8 @@ func update_all() -> void:
 	var invuln_bit: int = UnitStore.Flag.INVULNERABLE
 	var seek: int = UnitStore.Task.SEEK_LAND
 	var idle: int = UnitStore.State.IDLE
+	var disease := u.disease
+	var lava_b := Defs.biome_index("lava")
 	var dead_slots := PackedInt32Array()
 	var dead_causes := PackedStringArray()
 	for s in u.capacity:
@@ -62,18 +64,18 @@ func update_all() -> void:
 				if not invulnerable:
 					health[s] -= SimConst.STARVE_DAMAGE
 			hunger[s] = h
-		if h < SimConst.HUNGER_EAT_THRESHOLD and health[s] < max_health[s]:
+		if h < SimConst.HUNGER_EAT_THRESHOLD and health[s] < max_health[s] and disease[s] == 0:
 			health[s] = minf(max_health[s], health[s] + SimConst.REGEN_PER_TICK)
 		var ti := int(ys[s]) * width + int(xs[s])
 		var b := biome[ti]
 		if walk[b] == 0 and not invulnerable:
-			health[s] -= SimConst.HAZARD_DAMAGE
+			health[s] -= SimConst.HAZARD_DAMAGE if b != lava_b else DisasterSystem.LAVA_DAMAGE
 			if task[s] != seek:
 				next_think[s] = tick
 				state[s] = idle
 		if health[s] <= 0.0:
 			dead_slots.append(s)
-			dead_causes.append("starvation" if h >= SimConst.HUNGER_MAX else ("drowning" if water[b] == 1 else "injury"))
+			dead_causes.append("starvation" if h >= SimConst.HUNGER_MAX else ("drowning" if water[b] == 1 else ("lava" if b == lava_b else "injury")))
 		elif aging_on and not invulnerable and tick - birth[s] >= death_age[s]:
 			dead_slots.append(s)
 			dead_causes.append("old age")

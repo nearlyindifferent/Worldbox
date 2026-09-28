@@ -66,8 +66,15 @@ static func _v2_to_v3(d: Dictionary) -> Dictionary:
 	return d
 
 
-## Schema 4 added per-city kingdom tenure (rebellion grace) and famine rate limiting.
+## Schema 4 added per-city kingdom tenure (rebellion grace), famine rate limiting,
+## the disaster system (fire, lava, quakes) and per-unit plague state.
 static func _v3_to_v4(d: Dictionary) -> Dictionary:
+	var ud: Dictionary = d["units"]
+	var dis := PackedInt32Array()
+	dis.resize(int(ud.get("capacity", 0)))
+	ud["disease"] = dis
+	d["disasters"] = {"burning": PackedInt32Array(), "fuel": PackedInt32Array(), "lava": PackedInt32Array(),
+		"lava_t": PackedInt32Array(), "lava_flow": PackedInt32Array(), "quakes": [], "last_record": {}}
 	for c: Dictionary in d["cities"]:
 		c["joined_tick"] = int(c.get("founded_tick", 0))
 		c["last_famine_tick"] = -1000000

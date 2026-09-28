@@ -50,6 +50,7 @@ var realm: KingdomSystem
 var fx_events: Array[Dictionary] = []
 const FX_CAP := 256
 var vegetation: VegetationSystem
+var disasters: DisasterSystem
 var editor: TerrainEditor
 var timings: Dictionary = {}    ## system -> smoothed microseconds per tick
 var last_tick_usec: int = 0
@@ -85,6 +86,7 @@ func _init_systems() -> void:
 	civ = CivSystem.new(self)
 	realm = KingdomSystem.new(self)
 	vegetation = VegetationSystem.new(self)
+	disasters = DisasterSystem.new(self)
 	editor = TerrainEditor.new(self)
 	for n in ["population", "humans", "animals", "cities", "food", "births", "deaths"]:
 		if not stats.has(n):
@@ -140,6 +142,10 @@ func step() -> void:
 	t = Time.get_ticks_usec()
 	vegetation.update()
 	_time("vegetation", t)
+
+	t = Time.get_ticks_usec()
+	disasters.update()
+	_time("disasters", t)
 
 	t = Time.get_ticks_usec()
 	life.update_all()
@@ -199,6 +205,7 @@ func step() -> void:
 		_time("kingdoms", t)
 		t = Time.get_ticks_usec()
 		animal_ai.monthly_reproduction()
+		disasters.monthly()
 		_sample_stats()
 		_time("monthly", t)
 	last_tick_usec = Time.get_ticks_usec() - t0
@@ -329,6 +336,7 @@ func dispose() -> void:
 	civ = null
 	realm = null
 	vegetation = null
+	disasters = null
 	editor = null
 	pathfinder = null
 	spatial = null
@@ -454,6 +462,7 @@ func to_dict() -> Dictionary:
 		"civ_state": civ.to_dict(),
 		"components": pathfinder.components_to_dict(),
 		"undo": editor.undo_stack.duplicate(true),
+		"disasters": disasters.to_dict(),
 	}
 
 
@@ -503,6 +512,7 @@ static func from_dict(d: Dictionary) -> Simulation:
 	sim.realm.from_dict(d["realm"])
 	sim.pathfinder.components_from_dict(d["components"])
 	sim.editor.undo_stack.assign(d["undo"])
+	sim.disasters.from_dict(d["disasters"])
 	return sim
 
 

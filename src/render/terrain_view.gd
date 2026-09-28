@@ -42,6 +42,7 @@ func _ready() -> void:
 	_mat.set_shader_parameter("farmland_index", Defs.farmland_index)
 	_mat.set_shader_parameter("forest_index", Defs.forest_index)
 	_mat.set_shader_parameter("grass_index", Defs.grassland_index)
+	_mat.set_shader_parameter("lava_index", Defs.biome_index("lava"))
 	_mat.set_shader_parameter("chunk_size", float(SimConst.CHUNK))
 
 
@@ -124,20 +125,19 @@ func _encode_chunk(c: int) -> void:
 			var e := w.elevation[i]
 			var enw := w.elevation[i - w.width - 1] if x > 0 and y > 0 else e
 			_data[k + 2] = int(clampf(0.5 + (e - enw) * 7.0, 0.0, 1.0) * 255.0)
-			_data[k + 3] = 255
 			var o := w.owner[i]
 			if o == SimConst.CITY_NONE or not sim.cities.has(o):
 				_owner[k] = 0
 				_owner[k + 1] = 0
 				_owner[k + 2] = 0
+				_owner[k + 3] = 0
 			else:
 				var oc: City = sim.cities[o]
 				_owner[k] = o & 255
 				_owner[k + 1] = (o >> 8) & 255
 				_owner[k + 2] = oc.color_index + 1
 				_owner[k + 3] = (oc.kingdom * 37) & 255
-				continue
-			_owner[k + 3] = 0
+			_data[k + 3] = 255 if sim.disasters.on_fire[i] == 1 else 0
 
 
 func set_territory_visible(on: bool) -> void:

@@ -389,8 +389,14 @@ func _drain_sim_fx() -> void:
 	for e: Dictionary in sim.fx_events:
 		var t := int(e["tile"])
 		var tile := Vector2i(t % w, t / w)
+		var kind := str(e["kind"])
+		if vr.grow(12).has_point(Vector2(tile)):
+			if kind == "meteor":
+				camera.shake(9.0, 0.8)
+			elif kind == "quake":
+				camera.shake(5.0, float(e.get("dur", 1.0)))
 		if vr.has_point(Vector2(tile)):
-			fx.add_effect(str(e["kind"]), tile, 1)
+			fx.add_effect(kind, tile, int(e.get("r", 1)), float(e.get("dur", 0.0)))
 	sim.fx_events.clear()
 
 
@@ -417,7 +423,12 @@ func _apply_brush_at(t: Vector2i) -> void:
 	_last_brush_tile = t
 	var r := sim.apply_command({"op": "brush", "power": power, "x": t.x, "y": t.y, "radius": brush_radius})
 	if r["ok"]:
-		fx.add_effect(Powers.effect_kind(power), t, brush_radius)
+		var kind := Powers.effect_kind(power)
+		if kind == "disaster":
+			if power in ["fire", "rain", "plague"]:
+				fx.add_effect(power, t, brush_radius)
+		else:
+			fx.add_effect(kind, t, brush_radius)
 	elif str(r["msg"]) != "":
 		toast.emit(str(r["msg"]), false)
 

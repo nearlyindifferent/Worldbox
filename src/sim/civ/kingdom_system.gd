@@ -11,16 +11,16 @@ extends RefCounted
 ##   5. lets disloyal provinces rebel into new kingdoms.
 ## Every decision is written to the DecisionLog with its numeric reasons.
 
-const WAR_THRESHOLD := -35.0
+const WAR_THRESHOLD := -28.0
 const PEACE_EXHAUSTION := 45.0
 const MAX_WAR_YEARS := 12.0
 const MIN_YEARS_BETWEEN_WARS := 5.0
 const BORDER_RANGE := 45.0
 const SIEGE_RADIUS := 7.0
 const SIEGE_MIN_ATTACKERS := 3
-const REBEL_LOYALTY := 25.0
+const REBEL_LOYALTY := 22.0
 const REBEL_MIN_POP := 10
-const REBEL_CHANCE := 0.12          ## monthly, scaled by how far loyalty is below REBEL_LOYALTY
+const REBEL_CHANCE := 0.05          ## monthly, scaled by how far loyalty is below REBEL_LOYALTY
 const OCCUPATION_GRACE_YEARS := 4.0 ## no rebellion this soon after a city changes hands
 const REBEL_JOIN_LOYALTY := 30.0
 const REBEL_JOIN_RANGE := 20.0
@@ -32,6 +32,8 @@ const DECLARE_CHANCE := 0.25
 const PEACE_CHANCE := 0.35
 const GRIEVANCE_PER_DEATH := 2.0
 const GRIEVANCE_DECAY := 0.97
+const COVET_RATIO := 1.4
+const COVET_OPINION := -12.0
 const NAME_FORMS := ["Kingdom of %s", "Realm of %s", "Duchy of %s", "Crown of %s"]
 
 var sim: Simulation
@@ -272,7 +274,7 @@ func _update_loyalty(k: Kingdom) -> void:
 			c.loyalty = 100.0
 			continue
 		var d := cp.distance_to(Vector2(c.center % w, c.center / w))
-		var target := 100.0 - d * 1.2 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4
+		var target := 100.0 - d * 0.9 - maxf(0.0, k.cities.size() - 4) * 4.0 - k.exhaustion * 0.4
 		c.loyalty = clampf(c.loyalty + (clampf(target, 0.0, 100.0) - c.loyalty) * 0.1, 0.0, 100.0)
 
 
@@ -312,6 +314,13 @@ func _update_relations() -> void:
 				var peace_years := minf(15.0, float(sim.tick - int(p["last_peace"])) / SimConst.TICKS_PER_YEAR)
 				reasons.append(["years of peace", peace_years])
 				total += peace_years
+			# A much stronger neighbour covets the weaker one's land.
+			if dmin < BORDER_RANGE:
+				var sa := strength(a)
+				var sb := strength(b)
+				if maxi(sa, sb) >= 8 and float(maxi(sa, sb)) / maxf(1.0, mini(sa, sb)) >= COVET_RATIO:
+					reasons.append(["coveted land", COVET_OPINION])
+					total += COVET_OPINION
 			if a.parent == b.id or b.parent == a.id:
 				reasons.append(["shared origin", 12.0])
 				total += 12.0

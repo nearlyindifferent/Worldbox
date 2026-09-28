@@ -184,7 +184,40 @@ static func _brush(sim: Simulation, cmd: Dictionary) -> Dictionary:
 					sim.kill_unit(s, "smitten by the gods")
 					n += 1
 			sim.spatial.rebuild(sim.units)
+			if n > 0:
+				var at := sim.world.idx(clampi(x, 0, sim.world.width - 1), clampi(y, 0, sim.world.height - 1))
+				sim.disasters.record("smite", HistoryLog.Kind.GOD_ACT, "The gods struck down %d near %s." % [n, sim.disasters.place_name(at)], at)
 			return _ok("", {"killed": n})
+		"fire":
+			var lit := 0
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if dx * dx + dy * dy <= r * r + r and sim.world.in_bounds(x + dx, y + dy) and sim.disasters.ignite(sim.world.idx(x + dx, y + dy)):
+						lit += 1
+			if lit == 0:
+				return _fail("Nothing here will burn")
+			var ft := sim.world.idx(clampi(x, 0, sim.world.width - 1), clampi(y, 0, sim.world.height - 1))
+			sim.disasters.record("fire_power", HistoryLog.Kind.GOD_ACT, "The gods set fire to the land near %s." % sim.disasters.place_name(ft), ft)
+			return _ok("", {"lit": lit})
+		"rain":
+			return _ok("", {"doused": sim.disasters.rain(x, y, maxi(1, r))})
+		"meteor":
+			if not sim.world.in_bounds(x, y):
+				return _fail("Out of the world")
+			return _ok("", sim.disasters.meteor(x, y, r))
+		"earthquake":
+			if not sim.world.in_bounds(x, y):
+				return _fail("Out of the world")
+			sim.disasters.earthquake(x, y, r)
+			return _ok()
+		"volcano":
+			if not sim.world.in_bounds(x, y):
+				return _fail("Out of the world")
+			sim.disasters.volcano(x, y, r)
+			return _ok()
+		"plague":
+			var sick := sim.disasters.plague_power(x, y, r)
+			return _ok("", {"infected": sick}) if sick > 0 else _fail("No one here can catch the plague")
 		"incite_war", "forge_peace", "spark_rebellion":
 			var i := sim.world.idx(clampi(x, 0, sim.world.width - 1), clampi(y, 0, sim.world.height - 1))
 			var c: City = sim.cities.get(sim.world.owner[i], null)
