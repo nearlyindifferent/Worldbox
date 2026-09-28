@@ -38,6 +38,10 @@ func _ready() -> void:
 	col.add_child(_filter)
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_list.max_columns = 1
+	# Wrap long entries onto a second line instead of cutting them off.
+	_list.max_text_lines = 3
+	_list.same_column_width = true
+	_list.fixed_column_width = 420
 	_list.item_activated.connect(_jump)
 	_list.item_clicked.connect(func(i: int, _p: Vector2, _b: int) -> void: _jump(i))
 	col.add_child(_list)

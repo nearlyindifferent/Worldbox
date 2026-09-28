@@ -190,6 +190,8 @@ func show_toast(msg: String, good: bool = true) -> void:
 	p.add_theme_stylebox_override("panel", sb)
 	var l := UiTheme.label(msg)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(minf(480.0, get_viewport_rect().size.x - 48.0), 0)
 	p.add_child(l)
 	toasts.add_child(p)
 	if toasts.get_child_count() > 4:

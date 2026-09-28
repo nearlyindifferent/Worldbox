@@ -6,6 +6,7 @@ extends PanelContainer
 const SETTINGS := "user://settings.cfg"
 
 var game: Game
+var resume_speed := 1
 
 
 static func seen() -> bool:
@@ -86,4 +87,11 @@ func _center() -> void:
 
 func _close() -> void:
 	mark_seen()
+	game.set_speed(resume_speed)
 	queue_free()
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event.is_pressed() and (event as InputEventKey).keycode == KEY_ESCAPE:
+		get_viewport().set_input_as_handled()
+		_close()

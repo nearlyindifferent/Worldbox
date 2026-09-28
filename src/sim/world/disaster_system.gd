@@ -36,7 +36,7 @@ const PLAGUE_SPREAD_CHANCE := 0.12
 const PLAGUE_DAMAGE := 0.7            ## base health per tick, scaled by a per-person frailty
 const NATURAL_FIRE_CHANCE := 0.06     ## per month, world-wide, scaled by world size
 const NATURAL_PLAGUE_CHANCE := 0.006  ## per month, world-wide (about one outbreak in 14 years)
-const PLAGUE_MIN_POP := 40
+const PLAGUE_MIN_POP := 15
 const RECORD_GAP_TICKS := 90          ## chronicle rate limit per event key
 const IMPACT_RECORD_GAP := 60         ## meteors/quakes/volcanoes: at most one entry per 6 s
 const SETTLED_SPREAD := 0.45
@@ -112,7 +112,10 @@ func monthly() -> void:
 		var i := _dry_fuel_tile()
 		if i >= 0:
 			ignite(i)
-			record("wildfire", HistoryLog.Kind.DISASTER, "Lightning set the land ablaze near %s." % place_name(i), i)
+			# Only fires near towns are chronicled; wildfires in the wilds are routine.
+			var near := place_name(i)
+			if near != "the wilds":
+				record("wildfire", HistoryLog.Kind.DISASTER, "Lightning set the land ablaze near %s." % near, i, SimConst.TICKS_PER_YEAR)
 	# Plague is a rare world event that strikes a crowded town (bigger towns are likelier).
 	if sim.rng.chance(NATURAL_PLAGUE_CHANCE * sim.ages.factor("plague")):
 		var total := 0
@@ -416,7 +419,7 @@ func meteor(x: int, y: int, r: int) -> Dictionary:
 		if u.has_flag(s, UnitStore.Flag.INVULNERABLE):
 			continue
 		var d := Vector2(u.x[s] - x - 0.5, u.y[s] - y - 0.5).length()
-		if d <= radius * 0.6:
+		if d <= radius * 0.75:
 			sim.kill_unit(s, "meteor")
 			killed += 1
 		else:
@@ -464,6 +467,14 @@ func earthquake(x: int, y: int, r: int) -> void:
 	var at := w.idx(clampi(x, 0, w.width - 1), clampi(y, 0, w.height - 1))
 	record("quake", HistoryLog.Kind.DISASTER, "The earth shook near %s." % place_name(at), at, IMPACT_RECORD_GAP)
 	quakes.append({"x": x, "y": y, "r": radius, "left": QUAKE_TICKS})
+	# The first shock: buildings near the epicentre may fall at once.
+	for bid in sim.buildings.keys():
+		var bb: Building = sim.buildings.get(bid, null)
+		if bb == null:
+			continue
+		var bd := Vector2(bb.x - x, bb.y - y).length()
+		if bd <= radius * 0.5 and sim.rng.chance(QUAKE_COLLAPSE_CHANCE * (HALL_QUAKE_FACTOR if _fireproof(bid) else 1.5)):
+			sim.civ.destroy_building(bid, "collapsed in an earthquake")
 	# A fissure opens through the epicentre.
 	var ang := sim.rng.randf() * TAU
 	var dir := Vector2(cos(ang), sin(ang))

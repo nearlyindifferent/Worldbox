@@ -96,6 +96,8 @@ func _ready() -> void:
 func show_welcome() -> void:
 	var wp := WelcomePanel.new()
 	wp.game = self
+	wp.resume_speed = maxi(1, speed_index)
+	set_speed(0)
 	ui.add_child(wp)
 
 
@@ -541,7 +543,8 @@ func _load_audio_settings() -> void:
 func _inspect_at(t: Vector2i) -> void:
 	var wp := world_root.get_global_mouse_position() / AssetForge.TILE
 	sim.spatial.rebuild(sim.units)
-	var s := sim.unit_at(wp.x, wp.y, 1.0)
+	# Generous tap target: about 24 screen pixels, never less than a tile.
+	var s := sim.unit_at(wp.x, wp.y, maxf(1.0, 24.0 / (AssetForge.TILE * camera.current_zoom())))
 	if s >= 0:
 		select_unit(sim.units.id[s])
 		return

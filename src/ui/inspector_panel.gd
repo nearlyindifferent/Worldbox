@@ -129,6 +129,14 @@ func _link_row(label_text: String, text: String, cb: Callable) -> void:
 	_body.add_child(h)
 
 
+static func _plural(noun: String, n: int) -> String:
+	if n == 1:
+		return noun
+	if noun.ends_with("y") and not noun.ends_with("ey"):
+		return noun.substr(0, noun.length() - 1) + "ies"
+	return noun + "s"
+
+
 func _link(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -465,7 +473,7 @@ func _refresh_city() -> void:
 			sites.append("%s %d%%%s" % [b.def().name, int(100.0 * b.progress / maxf(1.0, b.def().work)), (" (needs " + ", ".join(need) + ")") if need.size() > 0 else ""])
 	var parts := PackedStringArray()
 	for k: String in counts:
-		parts.append("%d %s" % [counts[k], k.to_lower() + ("s" if int(counts[k]) > 1 else "")])
+		parts.append("%d %s" % [counts[k], _plural(k.to_lower(), int(counts[k]))])
 	_set_text("bld", ", ".join(parts))
 	_set_text("site", "none" if sites.is_empty() else "\n".join(sites))
 	_set_text("fields", "%d farmland tiles" % c.fields.size())

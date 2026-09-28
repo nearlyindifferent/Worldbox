@@ -99,3 +99,12 @@ Findings and resolution:
 9. Loaders set arbitrary keys → whitelisted fields; NaN/duplicate checks.
 10–13. Large-fire cost damped; plague scan skipped when nobody is sick; peace bonus capped; move-cost changes always reach the pathfinder.
 Also found by the builder while fixing these: same-capacity unit compaction left a stale waypoint cache (reload divergence), regression test added; the test runner reported script-error-aborted tests as passing (D-031).
+
+### Round 3 — Simulation critic (independent agent) — 2026-09-28
+PASS: determinism (twin runs, clone/save-load at age boundaries and law toggles over 50 years), wolf target slot reuse harmless, kingdom monthly 0.4 ms.
+Fixed (commit acffb04, tests `test_gauntlet_round3.gd`): watchtowers made towns uncapturable → towers raise the besieger count instead; hall not rebuilt when a granary survived; age quakes ignored the disaster law; age timer ran while ages were off; set_world_age accepted unknown ages; validator accepted stale id counters / living slots in the free list (+ building-footprint invariant); compaction left FIGHT targets stale; duplicate_unit re-rolled traits; invulnerable prey was eaten; monthly breeding spike (21 ms) → per-tick slice; wolf migration floor scales with map size.
+
+### Round 3 — "Hater" player critic (independent agent) — 2026-09-28
+PASS: tests (109), long runs with invariants OK, traits visibly drift, wars/conquests/rebellions now frequent (s42: 43 wars, 15 conquests, 6 rebellions in 100 y).
+Fixed: earthquakes now topple buildings near the epicentre (12 → 3 on a test town); meteor kill zone widened; woolback breeding and density cap lowered (s42 year 41: 268 people, 182 woolbacks, previously 3.5:1 sheep); plague outbreaks can hit towns from 15 people; wildfires in the wilds are no longer chronicled (only near towns, once a year); chronicle rows wrap instead of truncating; tapping a category picks its first power; the welcome card pauses the world and closes with Esc; toasts wrap to the screen width; tap-to-inspect radius scales with zoom (~24 px); "granaries" plural.
+Open (→ KNOWN_GAPS): portrait side panels still cover much of the map; late-game tick cost on 384²+ worlds exceeds the 10× budget (web single-threaded); only one sapient race, no alliances/religion/culture/items/monsters; voyages rare; empty granaries rarely starve anyone; stone supply can stall; no ambient audio.

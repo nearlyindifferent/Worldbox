@@ -52,7 +52,7 @@ func _ready() -> void:
 		b.custom_minimum_size = Vector2(110, 0)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.tooltip_text = "Show %s powers" % str(c["name"]).to_lower()
-		b.pressed.connect(show_category.bind(c["id"]))
+		b.pressed.connect(_pick_category.bind(c["id"]))
 		(tabs_a if k < 3 else tabs_b).add_child(b)
 		_tab_buttons[c["id"]] = b
 		k += 1
@@ -116,6 +116,14 @@ func _tool_button(icon_id: String, tip: String, cb: Callable) -> Button:
 	b.custom_minimum_size = Vector2(32, 30)
 	b.pressed.connect(cb)
 	return b
+
+
+## Tapping a tab also picks its first power, so the next tap on the map does something.
+func _pick_category(cat: String) -> void:
+	show_category(cat)
+	for c: Dictionary in Powers.CATEGORIES:
+		if c["id"] == cat and not (game.power in c["powers"]):
+			game.set_power(c["powers"][0])
 
 
 ## Shows the powers of `cat` without changing the selected power.

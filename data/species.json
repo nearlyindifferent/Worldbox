@@ -36,8 +36,8 @@
       "diet": "herbivore", "speed": 0.12, "max_health": 30, "damage": 0,
       "lifespan": [6, 10], "adult_age": 1, "fertile_age": [1, 8],
       "hunger_rate": 0.30, "graze_amount": 24, "graze_hunger": 35,
-      "birth_chance_per_month": 0.12, "birth_cooldown_years": 0.8, "litter": [1, 2],
-      "local_density_cap": 12, "meat_food": 4,
+      "birth_chance_per_month": 0.08, "birth_cooldown_years": 0.8, "litter": [1, 2],
+      "local_density_cap": 9, "meat_food": 4,
       "walkable": "land", "sprite": "quadruped",
       "palette": {"wool": ["#e8e4d8", "#d4ccb8", "#f4f0e8"], "face": ["#3a302a", "#5a4838"]}
     },
