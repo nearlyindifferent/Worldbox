@@ -178,3 +178,46 @@ func test_mid_war_clone_evolves_identically() -> void:
 	run_ticks(sim, 500)
 	run_ticks(copy, 500)
 	assert_eq(copy.state_hash(), sim.state_hash(), "war state saves and reloads exactly")
+
+
+func test_freshly_conquered_city_does_not_rebel_during_occupation() -> void:
+	var sim := TestWorlds.flat(160)
+	var band := TestWorlds.add_band(sim, 30.5, 30.5, 10)
+	var c := sim.civ.found_city(band[0], sim.world.idx(30, 30), [])
+	var k: Kingdom = sim.kingdoms[c.kingdom]
+	var far := TestWorlds.add_band(sim, 130.5, 130.5, 12)
+	for s in far:
+		sim.civ.settler_origin[sim.units.id[s]] = k.id
+	var province := sim.civ.found_city(far[0], sim.world.idx(130, 130), [])
+	province.joined_tick = sim.tick
+	province.loyalty = 0.0
+	for m in 24:
+		province.loyalty = 0.0
+		sim.realm._rebellions()
+	assert_eq(province.kingdom, k.id, "no uprising inside the occupation grace period")
+	sim.tick += int(KingdomSystem.OCCUPATION_GRACE_YEARS * SimConst.TICKS_PER_YEAR) + 1
+	var rebelled := false
+	for m in 200:
+		province.loyalty = 0.0
+		sim.realm._rebellions()
+		if province.kingdom != k.id:
+			rebelled = true
+			break
+	assert_true(rebelled, "a hostile province rebels once the grace period ends")
+
+
+func test_long_stalemate_ends_in_truce() -> void:
+	var sim := _two_realms(90)
+	var ks := _kingdoms(sim)
+	sim.realm.declare_war(ks[0], ks[1], [])
+	var p := sim.realm.pair((ks[0] as Kingdom).id, (ks[1] as Kingdom).id)
+	p["war_start"] = sim.tick - int(KingdomSystem.STALEMATE_YEARS * SimConst.TICKS_PER_YEAR) - 1
+	var peace := false
+	for m in 200:
+		(ks[0] as Kingdom).exhaustion = 0.0
+		(ks[1] as Kingdom).exhaustion = 0.0
+		sim.realm._war_month(p, ks[0], ks[1])
+		if not p["war"]:
+			peace = true
+			break
+	assert_true(peace, "a war with no gains ends in a truce even without exhaustion")

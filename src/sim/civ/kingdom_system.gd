@@ -20,7 +20,14 @@ const SIEGE_RADIUS := 7.0
 const SIEGE_MIN_ATTACKERS := 3
 const REBEL_LOYALTY := 25.0
 const REBEL_MIN_POP := 10
-const REBEL_CHANCE := 0.08
+const REBEL_CHANCE := 0.12          ## monthly, scaled by how far loyalty is below REBEL_LOYALTY
+const OCCUPATION_GRACE_YEARS := 4.0 ## no rebellion this soon after a city changes hands
+const REBEL_JOIN_LOYALTY := 30.0
+const REBEL_JOIN_RANGE := 20.0
+const REBEL_MAX_JOINERS := 2
+const STALEMATE_YEARS := 3.0        ## wars this old with no city taken lately may end in a truce
+const STALEMATE_PEACE_CHANCE := 0.06
+const INDEPENDENCE_YEARS := 5.0     ## a rebel realm that survives this long is recognised
 const DECLARE_CHANCE := 0.25
 const PEACE_CHANCE := 0.35
 const GRIEVANCE_PER_DEATH := 2.0
@@ -154,6 +161,7 @@ func _free_color() -> int:
 
 func _attach(k: Kingdom, c: City) -> void:
 	c.kingdom = k.id
+	c.joined_tick = sim.tick
 	if not k.cities.has(c.id):
 		k.cities.append(c.id)
 	c.color_index = k.color_index
@@ -218,7 +226,10 @@ func transfer_city(c: City, to: Kingdom, cause: String) -> void:
 			(p["cities_lost"] as Array)[0 if int(p["a"]) == from.id else 1] += 1
 	detach_city(c)
 	add_city(to, c)
-	c.loyalty = 20.0
+	c.loyalty = 40.0
+	var tp: Dictionary = pairs.get(pair_key(from_id, to.id), {})
+	if not tp.is_empty():
+		tp["last_capture"] = sim.tick
 	sim.history.record(sim.tick, HistoryLog.Kind.CITY_CONQUERED, "%s was %s by the %s (from the %s)." % [c.name, cause, to.name, from_name], {"kingdom": to.id, "city": c.id, "from": from_id}, c.center)
 	sim.push_fx("conquest", c.center)
 
@@ -394,7 +405,13 @@ func _war_month(p: Dictionary, a: Kingdom, b: Kingdom) -> void:
 	_retarget(p)
 	var years := float(sim.tick - int(p["war_start"])) / SimConst.TICKS_PER_YEAR
 	var tired := a.exhaustion >= PEACE_EXHAUSTION or b.exhaustion >= PEACE_EXHAUSTION
-	if (tired and sim.rng.chance(PEACE_CHANCE)) or years > MAX_WAR_YEARS:
+	var quiet_years := float(sim.tick - maxi(int(p["war_start"]), int(p.get("last_capture", -1000000)))) / SimConst.TICKS_PER_YEAR
+	var stalemate := years >= STALEMATE_YEARS and quiet_years >= STALEMATE_YEARS * 0.5
+	var rebel_war := a.parent == b.id or b.parent == a.id
+	if rebel_war and years >= INDEPENDENCE_YEARS and sim.rng.chance(PEACE_CHANCE):
+		stalemate = true
+		tired = true
+	if (tired and sim.rng.chance(PEACE_CHANCE)) or (stalemate and sim.rng.chance(STALEMATE_PEACE_CHANCE)) or years > MAX_WAR_YEARS:
 		var cas: Array = p["casualties"]
 		make_peace(a, b, [["war weariness (%s)" % a.name, a.exhaustion], ["war weariness (%s)" % b.name, b.exhaustion],
 			["years at war", years], ["dead (%s)" % a.name, int(cas[0])], ["dead (%s)" % b.name, int(cas[1])]])
@@ -481,7 +498,9 @@ func _rebellions() -> void:
 			var c: City = sim.cities.get(cid, null)
 			if c == null or c.id == k.capital or c.loyalty >= REBEL_LOYALTY or c.population() < REBEL_MIN_POP:
 				continue
-			if sim.rng.chance(REBEL_CHANCE):
+			if sim.tick - c.joined_tick < int(OCCUPATION_GRACE_YEARS * SimConst.TICKS_PER_YEAR):
+				continue
+			if sim.rng.chance(REBEL_CHANCE * (REBEL_LOYALTY - c.loyalty) / REBEL_LOYALTY):
 				rebel(c, [["loyalty", c.loyalty], ["rebellion threshold", REBEL_LOYALTY], ["war weariness of the crown", k.exhaustion]])
 				return
 
@@ -495,13 +514,17 @@ func rebel(c: City, reasons: Array) -> Kingdom:
 	c.loyalty = 100.0
 	# Nearby disloyal provinces join the uprising.
 	var w := sim.world.width
+	var joined := 0
 	for cid in old.cities.duplicate():
+		if joined >= REBEL_MAX_JOINERS or old.cities.size() < 2:
+			break
 		var o: City = sim.cities.get(cid, null)
-		if o == null or o.id == old.capital or o.loyalty >= 40.0:
+		if o == null or o.id == old.capital or o.loyalty >= REBEL_JOIN_LOYALTY:
 			continue
-		if Vector2(o.center % w - c.center % w, o.center / w - c.center / w).length() <= 25.0:
+		if Vector2(o.center % w - c.center % w, o.center / w - c.center / w).length() <= REBEL_JOIN_RANGE:
 			detach_city(o)
 			add_city(nk, o)
+			joined += 1
 	sim.history.record(sim.tick, HistoryLog.Kind.REBELLION, "%s rose in rebellion against the %s and founded the %s." % [c.name, old.name, nk.name], {"kingdom": nk.id, "city": c.id, "from": old.id}, c.center)
 	sim.decisions.record(sim.tick, "rebellion", c.name, "rebelled against the %s" % old.name, reasons, {"kingdom": nk.id, "city": c.id})
 	if sim.kingdoms.has(old.id) and sim.laws.is_on("wars"):

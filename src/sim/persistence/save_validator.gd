@@ -148,7 +148,7 @@ static func _units(ud: Dictionary, world_size: int, w: int, h: int) -> String:
 static func _city(c: Variant, world_size: int) -> String:
 	if typeof(c) != TYPE_DICTIONARY:
 		return "city entry is not a dictionary"
-	for k: String in ["id", "species", "center", "founded_tick", "color_index", "kingdom"]:
+	for k: String in ["id", "species", "center", "founded_tick", "color_index", "kingdom", "joined_tick", "last_famine_tick"]:
 		if typeof(c.get(k)) != TYPE_INT:
 			return "city.%s missing" % k
 	for k: String in ["members", "territory", "fields", "buildings"]:

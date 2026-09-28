@@ -8,7 +8,7 @@ extends RefCounted
 ##      (tests/unit/test_save_fixtures.gd fails if to_dict changes without a bump).
 
 ## from_schema -> method name that upgrades a dict from that schema to from_schema+1
-const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3"}
+const STEPS := {1: "_v1_to_v2", 2: "_v2_to_v3", 3: "_v3_to_v4"}
 
 
 static func migrate(d: Dictionary) -> Dictionary:
@@ -63,4 +63,12 @@ static func _v2_to_v3(d: Dictionary) -> Dictionary:
 	if not cs.has("settler_origin"):
 		cs["settler_origin"] = {}
 	d["civ_state"] = cs
+	return d
+
+
+## Schema 4 added per-city kingdom tenure (rebellion grace) and famine rate limiting.
+static func _v3_to_v4(d: Dictionary) -> Dictionary:
+	for c: Dictionary in d["cities"]:
+		c["joined_tick"] = int(c.get("founded_tick", 0))
+		c["last_famine_tick"] = -1000000
 	return d

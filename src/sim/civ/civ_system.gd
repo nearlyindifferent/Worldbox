@@ -33,6 +33,9 @@ const MAX_FOUNDERS := 12
 const OVERFLOW_DECAY := 0.3
 ## Share of adults drafted as soldiers while their kingdom is at war.
 const SOLDIER_SHARE := 0.3
+## Famine: share of a town that must be urgently hungry, and years between chronicle entries.
+const FAMINE_HUNGRY_SHARE := 0.25
+const FAMINE_RECORD_GAP_YEARS := 5
 
 var sim: Simulation
 var _blocked_logged: Dictionary = {}  ## building id -> true (log de-duplication only)
@@ -748,12 +751,20 @@ func _expand_territory(c: City) -> void:
 func _monthly(c: City) -> void:
 	var u := sim.units
 	var pop := c.population()
-	if float(c.storage["food"]) < 1.0 and pop > 0:
+	# A famine is people going hungry, not merely an empty granary: at least
+	# FAMINE_HUNGRY_SHARE of the town must be urgently hungry with nothing in store.
+	var hungry := 0
+	for mid in c.members:
+		var hs := u.slot_for(mid)
+		if hs >= 0 and u.hunger[hs] >= SimConst.HUNGER_URGENT:
+			hungry += 1
+	if float(c.storage["food"]) < 1.0 and pop > 0 and hungry >= maxi(2, int(ceil(pop * FAMINE_HUNGRY_SHARE))):
 		c.starving_months += 1
-		if c.starving_months == 3:
-			sim.history.record(sim.tick, HistoryLog.Kind.FAMINE, "Famine struck %s." % c.name, {"city": c.id}, c.center)
+		if c.starving_months == 2 and sim.tick - c.last_famine_tick >= FAMINE_RECORD_GAP_YEARS * SimConst.TICKS_PER_YEAR:
+			c.last_famine_tick = sim.tick
+			sim.history.record(sim.tick, HistoryLog.Kind.FAMINE, "Famine struck %s: %d of %d townsfolk are going hungry." % [c.name, hungry, pop], {"city": c.id}, c.center)
 			sim.decisions.record(sim.tick, "shortage", c.name, "is starving",
-				[["food in store", float(c.storage["food"])], ["population", pop], ["food produced last month", float(c.produced["food"])]], {"city": c.id})
+				[["food in store", float(c.storage["food"])], ["population", pop], ["urgently hungry", hungry], ["food produced last month", float(c.produced["food"])]], {"city": c.id})
 	else:
 		c.starving_months = 0
 	_spoil_overflow(c)

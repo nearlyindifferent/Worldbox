@@ -33,6 +33,8 @@ var founding_reasons: Array = []     ## [[label, value], ...] explaining why it 
 var alive: bool = true
 var kingdom: int = -1                ## owning Kingdom id
 var loyalty: float = 100.0           ## 0..100; low loyalty far from the capital breeds rebellion
+var joined_tick: int = 0             ## tick the city joined its current kingdom
+var last_famine_tick: int = -1000000 ## last chronicle famine entry (rate limit)
 
 
 func _init() -> void:
@@ -86,7 +88,7 @@ func to_dict() -> Dictionary:
 		"last_consumed": last_consumed.duplicate(), "job_counts": job_counts, "job_targets": job_targets,
 		"births": births, "deaths": deaths, "starving_months": starving_months,
 		"founding_reasons": founding_reasons.duplicate(true), "alive": alive,
-		"kingdom": kingdom, "loyalty": loyalty,
+		"kingdom": kingdom, "loyalty": loyalty, "joined_tick": joined_tick, "last_famine_tick": last_famine_tick,
 	}
 
 
