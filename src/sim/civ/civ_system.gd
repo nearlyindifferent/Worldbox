@@ -27,6 +27,11 @@ const SETTLER_BAND := 6
 const SETTLER_COOLDOWN_YEARS := 4.0
 const SETTLER_MIN_DISTANCE := 26
 const SETTLER_MAX_DISTANCE := 60
+## Longest sea crossing (tiles) a settler voyage will attempt.
+const VOYAGE_MAX := 90
+
+## Unit id -> [shore tile, landing tile, site tile] for settlers crossing the sea.
+var voyages: Dictionary = {}
 ## Most founders a new city accepts at once; the rest stay nomads and settle elsewhere.
 const MAX_FOUNDERS := 12
 ## Monthly decay of goods stored above capacity (spoilage / overflow).
@@ -979,8 +984,14 @@ func _maybe_send_settlers(c: City) -> void:
 		if score > best:
 			best = score
 			target = i
+	# No room on this landmass: a coastal town may send its settlers overseas.
+	var voyage := PackedInt32Array()
 	if target < 0 or best < SimConst.FOUND_MIN_SITE_SCORE * 0.8:
-		return
+		voyage = _plan_voyage(c)
+		if voyage.is_empty():
+			return
+		target = voyage[2]
+		best = float(evaluate_site(target)["score"])
 	var u := sim.units
 	var leaving := PackedInt32Array()
 	for mid in c.members:
@@ -1004,6 +1015,9 @@ func _maybe_send_settlers(c: City) -> void:
 		u.carry_type[s] = 0
 		u.task[s] = UnitStore.Task.FOUND_CITY
 		u.task_target[s] = target
+		if not voyage.is_empty():
+			u.task[s] = UnitStore.Task.SAIL
+			voyages[u.id[s]] = voyage.duplicate()
 		u.set_flag(s, UnitStore.Flag.SETTLER, true)
 		settler_attempts[u.id[s]] = 0
 		settler_origin[u.id[s]] = c.kingdom
@@ -1016,9 +1030,73 @@ func _maybe_send_settlers(c: City) -> void:
 				c.remove_member(cid)
 				u.city[cs] = SimConst.CITY_NONE
 				u.job[cs] = 0
-	sim.history.record(sim.tick, HistoryLog.Kind.MIGRATION, "Settlers led by %s left %s to seek new land." % [names[0], c.name], {"city": c.id, "unit": u.id[leaving[0]]}, target)
+				if not voyage.is_empty():
+					u.task[cs] = UnitStore.Task.SAIL
+					voyages[cid] = voyage.duplicate()
+					sim.movement.stop(cs)
+					u.next_think[cs] = sim.tick
+	if voyage.is_empty():
+		sim.history.record(sim.tick, HistoryLog.Kind.MIGRATION, "Settlers led by %s left %s to seek new land." % [names[0], c.name], {"city": c.id, "unit": u.id[leaving[0]]}, target)
+	else:
+		sim.history.record(sim.tick, HistoryLog.Kind.MIGRATION, "Settlers led by %s set sail from %s for distant shores." % [names[0], c.name], {"city": c.id, "unit": u.id[leaving[0]]}, target)
 	sim.decisions.record(sim.tick, "settlement", c.name, "sent %d settlers" % leaving.size(),
 		[["crowding (people / housing)", crowding], ["food for births", "short" if not births_food_ok(c) else "ok"], ["target site score", best]], {"city": c.id})
+
+
+## Finds an overseas site for a coastal town: returns [shore tile, landing tile,
+## site tile] or an empty array. The crossing is a straight line from the town
+## over open water to the first land of another landmass.
+func _plan_voyage(c: City) -> PackedInt32Array:
+	var w := sim.world
+	var home := sim.pathfinder.component_of(c.center)
+	var cx := float(c.center % w.width) + 0.5
+	var cy := float(c.center / w.width) + 0.5
+	var best := PackedInt32Array()
+	var best_score := SimConst.FOUND_MIN_SITE_SCORE * 0.8
+	for k in 12:
+		var ang := sim.rng.randf() * TAU
+		var dir := Vector2(cos(ang), sin(ang))
+		var shore := -1
+		var landing := -1
+		var water := 0
+		var p := Vector2(cx, cy)
+		for step in VOYAGE_MAX:
+			p += dir
+			var tx := int(p.x)
+			var ty := int(p.y)
+			if not w.in_bounds(tx, ty):
+				break
+			var i := w.idx(tx, ty)
+			if w.is_walkable(i):
+				if water == 0:
+					shore = i
+				elif sim.pathfinder.component_of(i) != home:
+					landing = i
+					break
+				else:
+					break
+			elif Defs.biome_water[w.biome[i]] == 1:
+				water += 1
+			else:
+				break
+		if shore < 0 or landing < 0 or water < 3:
+			continue
+		# Settle a little inland from the landing beach.
+		var site := landing
+		var lx := landing % w.width
+		var ly := landing / w.width
+		for inland in range(4, 0, -1):
+			var sx := clampi(lx + int(dir.x * inland), 0, w.width - 1)
+			var sy := clampi(ly + int(dir.y * inland), 0, w.height - 1)
+			var si := w.idx(sx, sy)
+			if w.is_walkable(si) and sim.pathfinder.component_of(si) == sim.pathfinder.component_of(landing):
+				site = si
+				break
+		var score := float(evaluate_site(site)["score"])
+		if score > best_score:
+			best_score = score
+			best = PackedInt32Array([shore, landing, site])
+	return best
 
 
 func abandon_city(c: City, reason: String) -> void:
@@ -1071,7 +1149,7 @@ func on_tile_changed(i: int) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"last_settlers": _last_settlers.duplicate(), "settler_attempts": settler_attempts.duplicate(), "settler_origin": settler_origin.duplicate(), "blocked_logged": _blocked_logged.duplicate()}
+	return {"last_settlers": _last_settlers.duplicate(), "settler_attempts": settler_attempts.duplicate(), "settler_origin": settler_origin.duplicate(), "blocked_logged": _blocked_logged.duplicate(), "voyages": voyages.duplicate(true)}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -1079,3 +1157,4 @@ func from_dict(d: Dictionary) -> void:
 	settler_attempts = d.get("settler_attempts", {})
 	settler_origin = d.get("settler_origin", {})
 	_blocked_logged = d.get("blocked_logged", {})
+	voyages = d.get("voyages", {})

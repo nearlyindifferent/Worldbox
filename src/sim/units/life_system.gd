@@ -44,6 +44,7 @@ func update_all() -> void:
 	var hunger_on := sim.laws.is_on("hunger")
 	var aging_on := sim.laws.is_on("natural_death")
 	var invuln_bit: int = UnitStore.Flag.INVULNERABLE
+	var sail_bit: int = UnitStore.Flag.SAILING
 	var seek: int = UnitStore.Task.SEEK_LAND
 	var idle: int = UnitStore.State.IDLE
 	var disease := u.disease
@@ -70,7 +71,7 @@ func update_all() -> void:
 			health[s] = minf(max_health[s], health[s] + SimConst.REGEN_PER_TICK)
 		var ti := int(ys[s]) * width + int(xs[s])
 		var b := biome[ti]
-		if walk[b] == 0 and not invulnerable:
+		if walk[b] == 0 and not invulnerable and (flags[s] & sail_bit) == 0:
 			health[s] -= SimConst.HAZARD_DAMAGE if b != lava_b else DisasterSystem.LAVA_DAMAGE
 			if task[s] != seek:
 				next_think[s] = tick

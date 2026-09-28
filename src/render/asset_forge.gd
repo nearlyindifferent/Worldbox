@@ -27,7 +27,7 @@ const MAT_COLORS := {
 
 ## Unit atlas frame indices.
 enum UF { MAN_IDLE, MAN_WALK_A, MAN_WALK_B, MAN_WORK, WOMAN_IDLE, WOMAN_WALK_A, WOMAN_WALK_B, WOMAN_WORK, SHEEP_A, SHEEP_B, SHEEP_EAT, CARRY_FOOD, CARRY_WOOD, CARRY_STONE, SHADOW,
-	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK, WOLF_A, WOLF_B, WOLF_EAT }
+	SOLDIER_IDLE, SOLDIER_WALK_A, SOLDIER_WALK_B, SOLDIER_ATTACK, SICK, WOLF_A, WOLF_B, WOLF_EAT, BOAT }
 const UNIT_ATLAS_COLS := 8
 ## Building atlas frame indices.
 enum BF { TOWN_HALL, HOUSE, GRANARY, SITE, FRAME, HOUSE_B, HOUSE_C, HOUSE_D, WATCHTOWER, FORGE, TEMPLE }
@@ -388,6 +388,19 @@ static func _draw_unit_frame(img: Image, f: int, ox: int, oy: int) -> void:
 			_m(img, ox + 2, oy + 6 + (0 if stride else 0), Mat.STONE_SHADE, 90)
 			_m(img, ox + (5 if stride else 4), oy + 6, Mat.OUTLINE)
 			_m(img, ox + (6 if stride else 5), oy + 6, Mat.STONE_SHADE, 90)
+		UF.BOAT:
+			# Small rowing boat with a square sail; the passenger is drawn above it.
+			for x in range(0, 8):
+				_m(img, ox + x, oy + 6, Mat.WOOD, 110)
+			for x in range(1, 7):
+				_m(img, ox + x, oy + 7, Mat.WOOD, 80)
+			_m(img, ox + 0, oy + 5, Mat.WOOD_LIGHT)
+			_m(img, ox + 7, oy + 5, Mat.WOOD_LIGHT)
+			for y in range(0, 6):
+				_m(img, ox + 5, oy + y, Mat.WOOD)
+			for y in range(1, 5):
+				_m(img, ox + 6, oy + y, Mat.WHITE, 140)
+				_m(img, ox + 7, oy + y, Mat.WHITE, 110)
 		UF.SICK:
 			# Three green bubbles rising over a plague victim's head.
 			_m(img, ox + 3, oy + 6, Mat.SICK)

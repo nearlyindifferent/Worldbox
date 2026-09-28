@@ -98,6 +98,11 @@ func update_view(view_rect_tiles: Rect2, zoom: float, delta: float) -> void:
 			if age_s < 1.0:
 				scale_f = 0.65 + 0.35 * age_s
 				pos += Vector2(4, 7) * (1.0 - scale_f)
+		if u.has_flag(s, UnitStore.Flag.SAILING):
+			var bob := Vector2(0, 1 if (step + s) % 4 < 2 else 0)
+			_body.add(pos + Vector2(0, 2) + bob, 1.0, Color.WHITE, AssetForge.UF.BOAT, 0, 0, flip)
+			_body.add(pos - Vector2(0, 2) + bob, scale_f, tint, frame, ga, gb, flags)
+			continue
 		_body.add(pos + Vector2(0, 1), scale_f, Color.WHITE, AssetForge.UF.SHADOW, 0, 0, 0)
 		_body.add(pos, scale_f, tint, frame, ga, gb, flags)
 		if u.disease[s] > 0:

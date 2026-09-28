@@ -59,6 +59,16 @@ static func validate(d: Dictionary) -> String:
 	err = _disasters(d["disasters"], size, int(wd["w"]), int(wd["h"]))
 	if err != "":
 		return err
+	var voy: Variant = (d["civ_state"] as Dictionary).get("voyages")
+	if typeof(voy) != TYPE_DICTIONARY:
+		return "voyages missing"
+	for k: Variant in voy:
+		var route: Variant = voy[k]
+		if typeof(k) != TYPE_INT or typeof(route) != TYPE_PACKED_INT32_ARRAY or (route as PackedInt32Array).size() != 3:
+			return "voyage entry invalid"
+		for t in route:
+			if t < 0 or t >= size:
+				return "voyage tile out of range"
 	var ag: Dictionary = d["ages"]
 	for k: String in ["current", "since", "until"]:
 		if typeof(ag.get(k)) != TYPE_INT:

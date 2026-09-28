@@ -55,8 +55,12 @@ func dispatch(s: int, ev: int) -> void:
 
 func update(s: int) -> void:
 	var u := sim.units
+	if sim.civ.voyages.has(u.id[s]):
+		if u.state[s] != UnitStore.State.MOVING and sim.tick >= u.next_think[s]:
+			_sail(s)
+		return
 	# Hunger interrupt: long trips and jobs are abandoned when food becomes urgent.
-	if u.state[s] != UnitStore.State.IDLE and u.hunger[s] >= SimConst.HUNGER_URGENT \
+	if u.state[s] != UnitStore.State.IDLE and u.hunger[s] >= SimConst.HUNGER_URGENT and not sim.civ.voyages.has(u.id[s]) \
 			and (sim.tick + s) % SimConst.THINK_INTERVAL == 0 and not _is_food_task(u.task[s]):
 		sim.movement.stop(s)
 		u.task[s] = UnitStore.Task.NONE
@@ -387,6 +391,37 @@ func _nomad(s: int, ti: int, adult: bool) -> void:
 	_wander_near(s, ti, 8)
 
 
+## Voyage (route in CivSystem.voyages): walk to the shore tile, sail straight to
+## the landing tile, then continue as ordinary settlers toward the site beyond.
+func _sail(s: int) -> void:
+	var u := sim.units
+	var w := sim.world
+	u.next_think[s] = sim.tick + SimConst.THINK_INTERVAL
+	var v: PackedInt32Array = sim.civ.voyages[u.id[s]]
+	var shore := v[0]
+	var landing := v[1]
+	var here := Vector2(u.x[s], u.y[s])
+	var at_landing := here.distance_to(Vector2(landing % w.width + 0.5, landing / w.width + 0.5)) < 1.5
+	if u.has_flag(s, UnitStore.Flag.SAILING):
+		if at_landing:
+			u.set_flag(s, UnitStore.Flag.SAILING, false)
+			sim.civ.voyages.erase(u.id[s])
+			u.task[s] = UnitStore.Task.FOUND_CITY
+			u.task_target[s] = v[2]
+			u.next_think[s] = sim.tick + 1
+		else:
+			sim.movement.go_to(s, landing, false)
+		return
+	if here.distance_to(Vector2(shore % w.width + 0.5, shore / w.width + 0.5)) < 1.5:
+		u.set_flag(s, UnitStore.Flag.SAILING, true)
+		sim.movement.go_to(s, landing, false)
+		return
+	if not _go(s, shore, UnitStore.Task.SAIL):
+		# The shore became unreachable: give up the voyage.
+		sim.civ.voyages.erase(u.id[s])
+		u.task[s] = UnitStore.Task.NONE
+
+
 ## Settlers travel to their chosen site, try to found there, scout nearby a few
 ## times, and otherwise give up and become ordinary nomads.
 func _settler(s: int, ti: int) -> void:
@@ -433,6 +468,9 @@ func _on_arrive(s: int) -> void:
 	var u := sim.units
 	var w := sim.world
 	var ti := int(u.y[s]) * w.width + int(u.x[s])
+	if sim.civ.voyages.has(u.id[s]):
+		_sail(s)
+		return
 	var job: Defs.JobDef = _jobs[u.job[s]]
 	match u.task[s]:
 		UnitStore.Task.FORAGE:

@@ -4,7 +4,7 @@ extends RefCounted
 ## advances it in fixed ticks. Contains no rendering or UI code and never reads
 ## frame time, so the same seed + command stream reproduces the same world.
 
-const SAVE_SCHEMA := 6
+const SAVE_SCHEMA := 7
 
 var seed_value: int = 0
 var shape: String = "island"
@@ -420,6 +420,7 @@ func kill_unit(s: int, cause: String) -> void:
 			if _deceased_head > 4096:
 				_deceased_order = _deceased_order.slice(_deceased_head)
 				_deceased_head = 0
+	civ.voyages.erase(uid)
 	month_deaths += 1
 	total_deaths += 1
 	var key := "%s: %s" % [(Defs.species[units.species[s]] as Defs.SpeciesDef).id, cause]

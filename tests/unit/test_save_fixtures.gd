@@ -124,6 +124,20 @@ func test_schema5_golden_save_migrates_to_v6() -> void:
 	_cleanup(m)
 
 
+func test_schema6_golden_save_migrates_to_v7() -> void:
+	var m := _mgr()
+	_cleanup(m)
+	_install_fixture(m, "schema6_seed5_96.sav", "v6")
+	var r := m.load_slot("v6")
+	assert_true(r["ok"], "schema-6 save loads: %s" % r.get("msg", ""))
+	if r["ok"]:
+		var sim: Simulation = r["sim"]
+		assert_true(sim.civ.voyages.is_empty())
+		run_ticks(sim, 300)
+		assert_no_violations(sim, "v6->v7 after 300 ticks")
+	_cleanup(m)
+
+
 func test_current_schema_golden_hash_is_stable() -> void:
 	# Fails if to_dict()/from_dict() change without a SAVE_SCHEMA bump + new fixture.
 	var info: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/schema%d_seed5_96.json" % Simulation.SAVE_SCHEMA))

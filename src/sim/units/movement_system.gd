@@ -102,6 +102,7 @@ func advance_all() -> void:
 	var frozen_bit: int = UnitStore.Flag.FROZEN
 	var traits := u.traits
 	var swift_bit := 1 << Traits.SWIFT
+	var sail_bit: int = UnitStore.Flag.SAILING
 	for s in cap:
 		if alive[s] == 0 or state[s] != moving or (flags[s] & frozen_bit) != 0:
 			continue
@@ -145,7 +146,7 @@ func advance_all() -> void:
 		var nx := x + dx / d * spd
 		var ny := y + dy / d * spd
 		var ni := int(ny) * w + int(nx)
-		if ni != cur_i and walk[biome[ni]] == 0 and walk[biome[cur_i]] == 1:
+		if ni != cur_i and walk[biome[ni]] == 0 and walk[biome[cur_i]] == 1 and (flags[s] & sail_bit) == 0:
 			paths.erase(s)
 			wp[s] = -1
 			state[s] = idle
