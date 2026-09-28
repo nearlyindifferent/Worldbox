@@ -37,6 +37,10 @@ var terrain := TerrainView.new()
 var buildings_view := BuildingView.new()
 var units_view := UnitView.new()
 var fx := WorldFx.new()
+var sounds := SoundBank.new()
+var _major_heard := 0
+var _base_ui_scale := 1.0
+var ui_scale := 1.0
 var camera := CameraRig.new()
 var ui_layer := CanvasLayer.new()
 var ui: GameUi
@@ -59,9 +63,10 @@ func _ready() -> void:
 	Defs.ensure_loaded()
 	if OS.has_feature("web"):
 		# High-density tablet screens: scale everything to the device pixel ratio.
-		get_window().content_scale_factor = clampf(roundf(DisplayServer.screen_get_scale()), 1.0, 3.0)
+		_base_ui_scale = clampf(roundf(DisplayServer.screen_get_scale()), 1.0, 3.0)
 		if str(boot.get("size", "")) == "medium":
 			boot["size"] = "small"
+	_apply_ui_scale()
 	get_viewport().gui_embed_subwindows = true
 	# Outside the world reads as open sea rather than an engine-grey void.
 	RenderingServer.set_default_clear_color(Color("#0d1a3c"))
@@ -72,6 +77,8 @@ func _ready() -> void:
 	world_root.add_child(fx)
 	add_child(camera)
 	camera.make_current()
+	add_child(sounds)
+	_load_audio_settings()
 	ui_layer.layer = 10
 	add_child(ui_layer)
 	ui = GameUi.new()
@@ -109,6 +116,7 @@ func _install(new_sim: Simulation) -> void:
 	if sim != null and sim != new_sim:
 		sim.dispose()
 	sim = new_sim
+	_major_heard = sim.history.major.size()
 	terrain.bind(sim)
 	buildings_view.sim = sim
 	units_view.sim = sim
@@ -221,6 +229,7 @@ func _process(delta: float) -> void:
 	fx.unit_alpha = alpha
 	_apply_held_brush(delta)
 	_drain_sim_fx()
+	_listen_history()
 	var vr := camera.visible_tiles_rect()
 	terrain.set_zoom_hint(camera.current_zoom())
 	buildings_view.update_view(vr)
@@ -231,6 +240,8 @@ func _process(delta: float) -> void:
 # ------------------------------------------------------------------ powers & selection
 
 func set_power(id: String) -> void:
+	if id != power:
+		sounds.play("click")
 	power = id
 	fx.brush_visible = Powers.DEFS[id]["brush"]
 	fx.brush_color = Powers.brush_color(id)
@@ -401,8 +412,14 @@ func _drain_sim_fx() -> void:
 		if vr.grow(12).has_point(Vector2(tile)):
 			if kind == "meteor":
 				camera.shake(9.0, 0.8)
+				sounds.play("boom")
 			elif kind == "quake":
 				camera.shake(5.0, float(e.get("dur", 1.0)))
+				sounds.play("rumble")
+			elif kind == "conquest":
+				sounds.play("horn", 0.8)
+		if kind == "hit" and vr.has_point(Vector2(tile)) and camera.current_zoom() > 1.0:
+			sounds.play("hit", 1.0, -12.0)
 		if vr.has_point(Vector2(tile)):
 			fx.add_effect(kind, tile, int(e.get("r", 1)), float(e.get("dur", 0.0)))
 	sim.fx_events.clear()
@@ -431,6 +448,7 @@ func _apply_brush_at(t: Vector2i) -> void:
 	_last_brush_tile = t
 	var r := sim.apply_command({"op": "brush", "power": power, "x": t.x, "y": t.y, "radius": brush_radius})
 	if r["ok"]:
+		_power_sound(power)
 		var kind := Powers.effect_kind(power)
 		if kind == "disaster":
 			if power in ["fire", "rain", "plague"]:
@@ -439,6 +457,79 @@ func _apply_brush_at(t: Vector2i) -> void:
 			fx.add_effect(kind, t, brush_radius)
 	elif str(r["msg"]) != "":
 		toast.emit(str(r["msg"]), false)
+
+
+func _power_sound(p: String) -> void:
+	match p:
+		"smite":
+			sounds.play("thunder")
+		"bless":
+			sounds.play("chime", 1.3, -4.0)
+		"fire":
+			sounds.play("fire")
+		"rain":
+			sounds.play("rain")
+		"plague":
+			sounds.play("bubble")
+		"spawn_human", "spawn_sheep", "spawn_wolf":
+			sounds.play("spawn")
+		"meteor", "earthquake", "volcano":
+			pass  # played when the simulation reports the impact
+		_:
+			if Powers.effect_kind(p) == "terrain":
+				sounds.play("dirt", 1.0, -6.0)
+			else:
+				sounds.play("click")
+
+
+## Great events of the chronicle get a sound cue: horns for war, chimes for new realms.
+func _listen_history() -> void:
+	var major := sim.history.major
+	if _major_heard > major.size():
+		_major_heard = major.size()
+	while _major_heard < major.size():
+		var k := int(major[_major_heard]["kind"])
+		_major_heard += 1
+		match k:
+			HistoryLog.Kind.WAR_DECLARED:
+				sounds.play("horn")
+			HistoryLog.Kind.KINGDOM_FALLEN:
+				sounds.play("horn", 0.7)
+			HistoryLog.Kind.CITY_FOUNDED, HistoryLog.Kind.PEACE:
+				sounds.play("chime")
+
+
+func set_volume(v: float) -> void:
+	sounds.volume = v
+	sounds.muted = v <= 0.001
+	var cfg := ConfigFile.new()
+	cfg.load(WelcomePanel.SETTINGS)
+	cfg.set_value("audio", "volume", v)
+	cfg.save(WelcomePanel.SETTINGS)
+
+
+func set_ui_scale(mult: float) -> void:
+	ui_scale = clampf(mult, 0.6, 1.6)
+	var cfg := ConfigFile.new()
+	cfg.load(WelcomePanel.SETTINGS)
+	cfg.set_value("ui", "scale", ui_scale)
+	cfg.save(WelcomePanel.SETTINGS)
+	_apply_ui_scale()
+
+
+func _apply_ui_scale() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(WelcomePanel.SETTINGS) == OK:
+		ui_scale = float(cfg.get_value("ui", "scale", ui_scale))
+	get_window().content_scale_factor = _base_ui_scale * ui_scale
+
+
+func _load_audio_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(WelcomePanel.SETTINGS) == OK:
+		var v := float(cfg.get_value("audio", "volume", 0.8))
+		sounds.volume = v
+		sounds.muted = v <= 0.001
 
 
 func _inspect_at(t: Vector2i) -> void:

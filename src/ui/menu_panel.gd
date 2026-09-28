@@ -89,7 +89,29 @@ func _ready() -> void:
 		visible = false)
 	gen.add_child(go)
 	col.add_child(gen)
-	col.add_child(UiTheme.label("F5 quicksave   F9 quickload   Autosave every %d years" % Game.AUTOSAVE_YEARS, "MutedLabel"))
+	col.add_child(HSeparator.new())
+	var opts := HBoxContainer.new()
+	opts.add_theme_constant_override("separation", 10)
+	opts.add_child(UiTheme.label("Sound", "MutedLabel"))
+	var vol := HSlider.new()
+	vol.min_value = 0.0
+	vol.max_value = 1.0
+	vol.step = 0.05
+	vol.value = game.sounds.volume if not game.sounds.muted else 0.0
+	vol.custom_minimum_size = Vector2(160, 32)
+	vol.focus_mode = Control.FOCUS_NONE
+	vol.value_changed.connect(game.set_volume)
+	opts.add_child(vol)
+	opts.add_child(UiTheme.label("   Interface size", "MutedLabel"))
+	for spec: Array in [["Small", 0.8], ["Normal", 1.0], ["Large", 1.25]]:
+		var b := Button.new()
+		b.text = spec[0]
+		b.focus_mode = Control.FOCUS_NONE
+		var mult: float = spec[1]
+		b.pressed.connect(func() -> void: game.set_ui_scale(mult))
+		opts.add_child(b)
+	col.add_child(opts)
+	col.add_child(UiTheme.label("Autosave every %d years.  Keyboard: F5 quicksave, F9 quickload" % Game.AUTOSAVE_YEARS, "MutedLabel"))
 
 
 func refresh() -> void:
