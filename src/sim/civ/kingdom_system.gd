@@ -34,7 +34,6 @@ const GRIEVANCE_PER_DEATH := 2.0
 const GRIEVANCE_DECAY := 0.97
 const COVET_RATIO := 1.4
 const COVET_OPINION := -12.0
-const NAME_FORMS := ["Kingdom of %s", "Realm of %s", "Duchy of %s", "Crown of %s"]
 
 var sim: Simulation
 ## "min:max" -> diplomatic record between two kingdoms (see _new_pair).
@@ -136,7 +135,8 @@ func create_for_city(c: City, parent: int, cause: String) -> Kingdom:
 	k.species = c.species
 	k.parent = parent
 	k.founded_tick = sim.tick
-	k.name = str(NAME_FORMS[sim.rng.randi_range(0, NAME_FORMS.size() - 1)]) % c.name
+	var rs := sim.units.slot_for(c.leader_id)
+	k.name = NameGen.realm_name(Defs.species[c.species], sim.rng, c.name, sim.units.name[rs] if rs >= 0 else "")
 	k.color_index = _free_color()
 	k.capital = c.id
 	k.ruler_id = c.leader_id

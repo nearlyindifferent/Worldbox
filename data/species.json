@@ -15,8 +15,20 @@
         "last": ["n", "th", "ra", "ric", "wyn", "mir", "sa", "dor", "ly", "ven", "is", "ek", "ia", "on"]
       },
       "city_names": {
-        "prefix": ["Ash", "Bright", "Cold", "Deep", "East", "Fair", "Green", "High", "Iron", "Long", "Mill", "North", "Oak", "Red", "Stone", "Thorn", "West", "White", "Wolf", "Elder"],
-        "suffix": ["ford", "haven", "hold", "mere", "moor", "stead", "vale", "wick", "field", "brook", "gate", "watch", "barrow", "reach"]
+        "prefix": ["Ash", "Bright", "Cold", "Deep", "Fair", "Green", "High", "Iron", "Long", "Mill", "Oak", "Red", "Stone", "Thorn", "White", "Wolf", "Elder", "Amber", "Barley", "Bell", "Briar", "Candle", "Copper", "Crow", "Dun", "Ember", "Fallow", "Glen", "Gold", "Hallow", "Hazel", "Honey", "Kings", "Lark", "Linden", "Marl", "Moss", "Orchard", "Raven", "Rook", "Rowan", "Rye", "Silver", "Sorrow", "Swan", "Tallow", "Thistle", "Willow", "Wren", "Yarrow"],
+        "suffix": ["ford", "hold", "stead", "vale", "wick", "field", "gate", "watch", "barrow", "reach", "ton", "bury", "ham", "cross", "fall", "hearth", "stow", "worth", "den", "ley"],
+        "coast_prefix": ["Salt", "Gull", "Tide", "Shell", "Sea", "Pearl", "Kelp", "Storm", "Wave", "Anchor"],
+        "coast_suffix": ["haven", "port", "strand", "mouth", "bay", "cove", "wharf", "quay"],
+        "forest_prefix": ["Oak", "Elm", "Ash", "Fern", "Holly", "Pine", "Birch", "Bramble", "Moss", "Owl"],
+        "forest_suffix": ["wood", "holt", "glade", "shaw", "grove", "hurst", "thicket"],
+        "hill_prefix": ["Stone", "Iron", "High", "Crag", "Flint", "Slate", "Eagle", "Grey", "Granite", "Cairn"],
+        "hill_suffix": ["crag", "tor", "ridge", "fell", "cliff", "peak", "howe", "scar"],
+        "water_suffix": ["mere", "brook", "well", "pool", "ford", "water", "lake"],
+        "cold_prefix": ["Frost", "Snow", "Rime", "Winter", "Ice", "Hoar"],
+        "dry_prefix": ["Dust", "Sun", "Sand", "Dune", "Red", "Scorch"],
+        "marsh_prefix": ["Fen", "Reed", "Mire", "Bog", "Heron", "Rush"],
+        "realm_forms": ["Kingdom of %s", "Realm of %s", "Duchy of %s", "Crown of %s", "Principality of %s", "%s Dominion", "Free Folk of %s", "%s March", "League of %s", "High Seat of %s"],
+        "dynasty_forms": ["%s Dynasty", "House of %s", "%s Throne"]
       }
     },
     {

@@ -167,6 +167,44 @@ func scout_site(ti: int) -> int:
 	return best
 
 
+## Landscape words for naming a town founded at tile `ti`.
+func _site_features(ti: int) -> PackedStringArray:
+	var w := sim.world
+	var counts := {}
+	var cx := ti % w.width
+	var cy := ti / w.width
+	for dy in range(-6, 7, 2):
+		for dx in range(-6, 7, 2):
+			if not w.in_bounds(cx + dx, cy + dy):
+				continue
+			var i := w.idx(cx + dx, cy + dy)
+			var b: Defs.BiomeDef = Defs.biomes[w.biome[i]]
+			var key := ""
+			match b.id:
+				"ocean", "deep_ocean":
+					key = "coast"
+				"shallow":
+					key = "water"
+				"forest", "mystic":
+					key = "forest"
+				"hills", "mountain":
+					key = "hill"
+				"snow":
+					key = "cold"
+				"desert":
+					key = "dry"
+				"swamp":
+					key = "marsh"
+			if key != "":
+				counts[key] = int(counts.get(key, 0)) + 1
+	var out := PackedStringArray()
+	for k: String in counts:
+		if int(counts[k]) >= 4:
+			out.append(k)
+	out.sort()
+	return out
+
+
 func found_city(s: int, ti: int, reasons: Array) -> City:
 	var u := sim.units
 	var w := sim.world
@@ -178,7 +216,7 @@ func found_city(s: int, ti: int, reasons: Array) -> City:
 	var taken := {}
 	for other: City in sim.cities.values():
 		taken[other.name] = true
-	c.name = NameGen.city_name(Defs.species[u.species[s]], sim.rng, taken)
+	c.name = NameGen.city_name(Defs.species[u.species[s]], sim.rng, taken, _site_features(ti))
 	c.species = u.species[s]
 	c.founded_tick = sim.tick
 	c.founder_id = u.id[s]
