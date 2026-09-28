@@ -13,7 +13,7 @@ const CATEGORIES := [
 ]
 
 const DEFS := {
-	"inspect": {"name": "Inspect", "desc": "Click a creature, building or territory to see who they are and why things happen.", "brush": false, "repeat": 0.0},
+	"inspect": {"name": "Inspect", "desc": "Tap a creature, building or territory to see who they are and why things happen.", "brush": false, "repeat": 0.0},
 	"raise": {"name": "Raise Land", "desc": "Lifts the ground. Seas become shores, plains become hills and peaks.", "brush": true, "repeat": 0.06},
 	"lower": {"name": "Lower Land", "desc": "Sinks the ground. Enough lowering floods land into sea.", "brush": true, "repeat": 0.06},
 	"paint_grass": {"name": "Grassland", "desc": "Fertile meadow. Grazers feed here and farmers love it.", "brush": true, "repeat": 0.04},
@@ -41,8 +41,8 @@ const DEFS := {
 	"earthquake": {"name": "Earthquake", "desc": "Shake the ground: buildings collapse and a fissure tears open.", "brush": true, "repeat": 0.0},
 	"volcano": {"name": "Volcano", "desc": "Raise a volcano that spews lava downhill. Lava cools into ashlands.", "brush": true, "repeat": 0.0},
 	"plague": {"name": "Plague", "desc": "Infect creatures under the brush. Sickness spreads to neighbours; survivors become immune.", "brush": true, "repeat": 0.4},
-	"incite_war": {"name": "Incite War", "desc": "Click a city: its kingdom declares war on its nearest neighbouring kingdom.", "brush": false, "repeat": 0.0},
-	"forge_peace": {"name": "Forge Peace", "desc": "Click a city: its kingdom makes peace with all its enemies.", "brush": false, "repeat": 0.0},
+	"incite_war": {"name": "Incite War", "desc": "Tap a town: its kingdom declares war on its nearest neighbouring kingdom.", "brush": false, "repeat": 0.0},
+	"forge_peace": {"name": "Forge Peace", "desc": "Tap a town: its kingdom makes peace with all its enemies.", "brush": false, "repeat": 0.0},
 	"spark_rebellion": {"name": "Spark Rebellion", "desc": "Tap a town: it breaks away from its kingdom, or, if it stands alone, its people overthrow their ruler.", "brush": false, "repeat": 0.0},
 }
 
