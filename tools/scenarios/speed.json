@@ -1,0 +1,6 @@
+[
+  {"do": "frames", "n": 5},
+  {"do": "custom_speed", "value": 30},
+  {"do": "frames", "n": 90},
+  {"do": "shot", "name": "speed_panel"}
+]

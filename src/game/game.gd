@@ -13,6 +13,10 @@ signal toast(msg: String, good: bool)
 const SPEEDS := [0, 1, 2, 5, 10]
 const SPEED_ICONS := ["pause", "play", "fast", "faster", "fastest"]
 const FRAME_SIM_BUDGET_MS := 14.0
+## At custom speeds above 10x the frame may spend longer simulating (lower frame rate, more ticks).
+const FAST_SIM_BUDGET_MS := 24.0
+## Speeds the custom speed slider offers (multiples of normal speed).
+const CUSTOM_STOPS := [0.25, 0.5, 1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 75, 100]
 const AUTOSAVE_YEARS := 10
 const MAX_BRUSH := 12
 
@@ -23,6 +27,10 @@ var sim: Simulation
 var saves := SaveManager.new()
 var speed_index: int = 1
 var admin_speed: int = 0  ## admin override (ticks/sec multiplier), 0 = use SPEEDS
+var custom_speed := 25.0  ## the player's chosen custom multiplier (saved in settings)
+var using_custom := false
+## Speed the world actually ran at recently (x normal), for the top bar readout.
+var effective_speed := 0.0
 var power: String = "inspect"
 var brush_radius: int = 3
 var selected_unit: int = -1
@@ -79,6 +87,9 @@ func _ready() -> void:
 	camera.make_current()
 	add_child(sounds)
 	_load_audio_settings()
+	var cfg := ConfigFile.new()
+	if cfg.load(WelcomePanel.SETTINGS) == OK:
+		custom_speed = float(cfg.get_value("time", "custom_speed", custom_speed))
 	ui_layer.layer = 10
 	add_child(ui_layer)
 	ui = GameUi.new()
@@ -181,24 +192,54 @@ func load_world(slot: String) -> bool:
 func set_speed(i: int) -> void:
 	speed_index = clampi(i, 0, SPEEDS.size() - 1)
 	admin_speed = 0
+	using_custom = false
 	speed_changed.emit()
 
 
+## Runs the world at any multiple of normal speed (0.25x to 100x).
+func set_custom_speed(mult: float) -> void:
+	custom_speed = clampf(mult, CUSTOM_STOPS[0], CUSTOM_STOPS[CUSTOM_STOPS.size() - 1])
+	using_custom = true
+	admin_speed = 0
+	speed_index = maxi(1, speed_index)
+	var cfg := ConfigFile.new()
+	cfg.load(WelcomePanel.SETTINGS)
+	cfg.set_value("time", "custom_speed", custom_speed)
+	cfg.save(WelcomePanel.SETTINGS)
+	speed_changed.emit()
+
+
+func is_paused() -> bool:
+	return speed_index == 0 and not using_custom and admin_speed == 0
+
+
 func toggle_pause() -> void:
-	if speed_index == 0:
-		set_speed(_resume_speed)
+	if is_paused():
+		if _resume_custom:
+			set_custom_speed(custom_speed)
+		else:
+			set_speed(_resume_speed)
 	else:
 		_resume_speed = speed_index
+		_resume_custom = using_custom
 		set_speed(0)
 
 
 var _resume_speed := 1
+var _resume_custom := false
+
+
+## Requested speed as a multiple of normal speed.
+func requested_speed() -> float:
+	if admin_speed > 0:
+		return float(admin_speed)
+	if using_custom:
+		return custom_speed
+	return float(SPEEDS[speed_index])
 
 
 func ticks_per_second() -> float:
-	if admin_speed > 0:
-		return float(SimConst.TICKS_PER_SECOND * admin_speed)
-	return float(SimConst.TICKS_PER_SECOND * SPEEDS[speed_index])
+	return SimConst.TICKS_PER_SECOND * requested_speed()
 
 
 func _process(delta: float) -> void:
@@ -208,18 +249,22 @@ func _process(delta: float) -> void:
 	ticks_last_frame = 0
 	var t0 := Time.get_ticks_usec()
 	sim_lagging = false
+	var budget := FAST_SIM_BUDGET_MS if requested_speed() > 10.0 else FRAME_SIM_BUDGET_MS
 	if tps > 0.0:
 		_acc += delta * tps
 		while _acc >= 1.0:
 			sim.step()
 			_acc -= 1.0
 			ticks_last_frame += 1
-			if (Time.get_ticks_usec() - t0) / 1000.0 > FRAME_SIM_BUDGET_MS:
+			if (Time.get_ticks_usec() - t0) / 1000.0 > budget:
 				# Simulation cannot keep up: run slower instead of skipping logic.
 				sim_lagging = _acc >= 1.0
 				_acc = minf(_acc, 1.0)
 				break
 	sim_ms_last_frame = (Time.get_ticks_usec() - t0) / 1000.0
+	if delta > 0.0:
+		var now_speed := float(ticks_last_frame) / delta / SimConst.TICKS_PER_SECOND
+		effective_speed = lerpf(effective_speed, now_speed, clampf(delta * 2.0, 0.0, 1.0))
 	if ticks_last_frame > 0 and sim.year() >= _last_autosave_year + AUTOSAVE_YEARS and _autosave_task < 0:
 		_last_autosave_year = sim.year()
 		_start_autosave()

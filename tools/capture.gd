@@ -10,6 +10,7 @@ extends SceneTree
 ##   key{key, ctrl?, shift?} | click{x,y,button?} (screen) | drag{x0,y0,x1,y1,button?} | hover{x,y}
 ##   panel{name: admin|history|perf|menu, on} | speed{i} | save{slot} | load{slot} | new_world{seed,size,shape}
 ##   admin_tab{index} | overlay{index} | print{what: perf|hash|stats|selection} | assert_panel{name, visible}
+##   custom_speed{value, panel} | world_age{id}
 ##   record_start{name} | record_stop  (saves every rendered frame; run godot with --fixed-fps 30)
 ##   brush may use {"city": index, "dx", "dy"} instead of x/y to target tiles near a city
 
@@ -211,6 +212,10 @@ func _step(st: Dictionary) -> void:
 		"new_world":
 			game.new_world(int(st.get("seed", 1)), st.get("size", "medium"), st.get("shape", "island"))
 			await _frames(3)
+		"custom_speed":
+			game.set_custom_speed(float(st.get("value", 25)))
+			if bool(st.get("panel", true)):
+				game.ui.speed_panel.open()
 		"world_age":
 			game.sim.apply_command({"op": "set_world_age", "age": str(st.get("id", "winter"))})
 		"print":

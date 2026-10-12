@@ -9,6 +9,7 @@ var power_bar: PowerBar
 var inspector: InspectorPanel
 var history: HistoryPanel
 var stats: StatsPanel
+var speed_panel: SpeedPanel
 var admin: AdminPanel
 var perf: PerfOverlay
 var menu: MenuPanel
@@ -75,6 +76,11 @@ func _ready() -> void:
 	admin.game = game
 	admin.visible = false
 	add_child(admin)
+
+	speed_panel = SpeedPanel.new()
+	speed_panel.game = game
+	speed_panel.visible = false
+	add_child(speed_panel)
 
 	menu = MenuPanel.new()
 	menu.game = game

@@ -14,6 +14,7 @@ var _title: Label
 var _title_sep: VSeparator
 var _animal_icon: Control
 var _narrow := false
+var _custom_btn := Button.new()
 
 
 func _ready() -> void:
@@ -44,6 +45,19 @@ func _ready() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		speeds.add_child(b)
 		_speed_buttons.append(b)
+	# Custom speed: any multiple from slow motion to 100x, set in a small panel.
+	_custom_btn.theme_type_variation = "ToolButton"
+	_custom_btn.toggle_mode = true
+	_custom_btn.focus_mode = Control.FOCUS_NONE
+	_custom_btn.custom_minimum_size = Vector2(56, 36)
+	_custom_btn.tooltip_text = "Custom speed (slow motion to x100)"
+	_custom_btn.pressed.connect(func() -> void:
+		if game.ui.speed_panel.visible:
+			game.ui.speed_panel.visible = false
+		else:
+			game.ui.speed_panel.open()
+		_sync_speed())
+	speeds.add_child(_custom_btn)
 	row.add_child(speeds)
 	_lag.text = ""
 	_lag.theme_type_variation = "MutedLabel"
@@ -81,12 +95,16 @@ func _ready() -> void:
 ## Drops the title and animal count and shortens the date on narrow screens.
 func _fit() -> void:
 	var w := get_viewport_rect().size.x
-	_narrow = w < 1000.0
-	_title.visible = w >= 1150.0
+	_narrow = w < 1100.0
+	_title.visible = w >= 1250.0
 	_title_sep.visible = _title.visible
 	_animal_icon.visible = not _narrow
 	_animals.visible = not _narrow
-	_date.custom_minimum_size = Vector2(130 if _narrow else 360, 0)
+	_lag.visible = w >= 1250.0
+	_date.custom_minimum_size = Vector2(110 if _narrow else 330, 0)
+	for b in _speed_buttons:
+		b.custom_minimum_size = Vector2(34 if _narrow else 40, 36)
+	_custom_btn.custom_minimum_size = Vector2(48 if _narrow else 56, 36)
 	_timer = 1.0
 
 
@@ -97,7 +115,9 @@ func _vsep() -> VSeparator:
 
 func _sync_speed() -> void:
 	for k in _speed_buttons.size():
-		_speed_buttons[k].set_pressed_no_signal(k == game.speed_index and game.admin_speed == 0)
+		_speed_buttons[k].set_pressed_no_signal(k == game.speed_index and game.admin_speed == 0 and not game.using_custom)
+	_custom_btn.set_pressed_no_signal(game.using_custom)
+	_custom_btn.text = SpeedPanel.label_for(game.custom_speed) if game.using_custom else "x?"
 
 
 func _process(delta: float) -> void:
@@ -117,4 +137,7 @@ func _process(delta: float) -> void:
 	_pop.text = str(humans)
 	_cities.text = str(sim.cities.size())
 	_animals.text = str(sim.units.count - humans)
-	_lag.text = "sim slowed" if game.sim_lagging else ("x%d admin" % game.admin_speed if game.admin_speed > 0 else "")
+	if game.sim_lagging:
+		_lag.text = "running %s" % SpeedPanel.label_for(maxf(game.effective_speed, 0.25))
+	else:
+		_lag.text = ("x%d admin" % game.admin_speed) if game.admin_speed > 0 else ""
